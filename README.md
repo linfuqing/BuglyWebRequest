@@ -15,7 +15,7 @@ https://github.com/linfuqing/BuglyWebRequest.git
 ```
 自己已经配置的Bugly Android依赖不会被覆盖
 
-—— 2. 配置 SDK（如果已经自行完成或拥有完成官方 Bugly（启用 NET_QUALITY）和数数默认实例初始化，可忽略该步骤）
+—— 2. 配置 SDK（如果已经自行完成或拥有官方 Bugly（启用 NET_QUALITY）和数数默认实例初始化，可忽略该步骤）
 
 由本 SDK 初始化：将包内 `Runtime/Prefabs/BuglyWebRequest.prefab` 拖入启动场景，在 Inspector 中填写配置，只需放一份。
 
