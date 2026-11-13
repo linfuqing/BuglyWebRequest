@@ -39,7 +39,9 @@ namespace ZeroGame.Networking.Editor
                 "-keep class cn.zero3d.buglywebrequest.** { *; }\n" +
                 "-keep class com.tencent.bugly.library.** { public *; }\n" +
                 "-keep class com.tencent.bugly.network.** { public *; }\n" +
-                "-keep class okhttp3.sse.** { public *; }\n");
+                "-keep class okhttp3.sse.** { public *; }\n" +
+                "-keep class cn.thinkingdata.analytics.TDAnalyticsAPI { public static cn.thinkingdata.analytics.ThinkingAnalyticsSDK getInstance(java.lang.String); }\n" +
+                "-keep class cn.thinkingdata.analytics.ThinkingAnalyticsSDK { public void track(java.lang.String, org.json.JSONObject); }\n" );
             var gradlePath = Path.Combine(path, "build.gradle");
             var gradle = File.ReadAllText(gradlePath);
             gradle = GradleDependencyUtility.EnsureDependencies(gradle, message => Debug.Log(message));

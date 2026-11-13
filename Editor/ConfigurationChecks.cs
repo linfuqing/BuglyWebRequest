@@ -36,6 +36,16 @@ namespace ZeroGame.Networking.Editor
                 config.ThinkingServerUrl = "";
                 config.ThinkingTimeZoneId = "";
                 Check(config.Validate(out error), "Reuse incorrectly requires fresh initialization fields");
+                config.EnableBugly = true;
+                config.ReuseBuglyInstance = true;
+                config.BuglyRegion = (BuglyRegion)99;
+                config.ThinkingAppId = "";
+                Check(config.Validate(out error), "Reuse must not require native credentials/configuration");
+                config.ReuseBuglyInstance = false;
+                Check(!config.Validate(out error) && error.Contains("BuglyAppId"), "Owned Bugly accepted blank credentials");
+                config.ReuseBuglyInstance = true;
+                config.ReuseThinkingDataInstance = false;
+                Check(!config.Validate(out error) && error.Contains("ThinkingAppId"), "Owned ThinkingData accepted blank credentials");
                 Debug.Log("[BuglyWebRequest] Configuration checks PASS: Mode/TimeZone/custom timezone/default request isolation/reuse/validation. No SDK initialized or network sent.");
             }
 

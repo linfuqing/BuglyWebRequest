@@ -21,7 +21,7 @@ namespace ZeroGame.Networking
             {
                 if (instance == null) instance = FindObjectOfType<BuglySdkManager>();
                 if (instance == null)
-                    throw new InvalidOperationException("请先将 SDK 的 Runtime/Prefabs/BuglySDK.prefab 拖入启动场景。");
+                    throw new InvalidOperationException("请先将 SDK 的 Runtime/Prefabs/BuglyWebRequest.prefab 拖入启动场景。");
                 return instance;
             }
         }

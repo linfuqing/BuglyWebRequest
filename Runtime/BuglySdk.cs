@@ -24,16 +24,21 @@ namespace ZeroGame.Networking
                 Debug.LogError(LastInitializationError); return false;
             }
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (config.EnableBugly && !IsInitialized)
+            if (config.EnableBugly && (config.ReuseBuglyInstance || !IsInitialized))
             {
                 try
                 {
-                    using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
-                    using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
-                    using (var context = activity.Call<AndroidJavaObject>("getApplicationContext"))
-                    using (var sdk = new AndroidJavaClass("cn.zero3d.buglywebrequest.SdkBridge"))
-                        IsInitialized = sdk.CallStatic<bool>("initialize", context, config.BuglyAppId, config.BuglyAppKey,
-                            Application.version, config.BuglyDebugMode, Debug.isDebugBuild, config.BuglyRegion == BuglyRegion.Overseas, config.BuglyEnableNativeLogs, "", config.BuglyFilterLocalRequests);
+                    if (config.ReuseBuglyInstance)
+                        RequireReusedBugly();
+                    else
+                    {
+                        using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                        using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                        using (var context = activity.Call<AndroidJavaObject>("getApplicationContext"))
+                        using (var sdk = new AndroidJavaClass("cn.zero3d.buglywebrequest.SdkBridge"))
+                            IsInitialized = sdk.CallStatic<bool>("initialize", context, config.BuglyAppId, config.BuglyAppKey,
+                                Application.version, config.BuglyDebugMode, Debug.isDebugBuild, config.BuglyRegion == BuglyRegion.Overseas, config.BuglyEnableNativeLogs, "", config.BuglyFilterLocalRequests);
+                    }
                     if (!IsInitialized)
                     {
                         string message = "[BuglyWebRequest][Initialize.Bugly] Android Bugly.init 返回 false，原生 SDK 未提供详细错误文本。请开启 BuglyEnableNativeLogs，查看 Android Logcat 中 Bugly/RMonitor 的初始化日志；当前地区=" + config.BuglyRegion + "。";
@@ -49,7 +54,7 @@ namespace ZeroGame.Networking
 #endif
             bool platformAllowed = Application.platform == RuntimePlatform.Android ||
                 (Application.isEditor && config.EnableEditorAnalytics);
-            if (config.EnableThinkingData && !ThinkingDataReady && platformAllowed)
+            if (config.EnableThinkingData && (config.ReuseThinkingDataInstance || !ThinkingDataReady) && platformAllowed)
             {
                 try
                 {
@@ -60,7 +65,7 @@ namespace ZeroGame.Networking
                         TDAnalytics.Init(td);
                         TDAnalytics.SetNetworkType(config.ThinkingNetworkType, config.ThinkingAppId);
                     }
-                    UseInitializedThinkingData(config.ThinkingAppId, config.EnableEditorAnalytics);
+                    BindThinkingData(config.ThinkingAppId, config.EnableEditorAnalytics, config.ReuseThinkingDataInstance);
                 }
                 catch (Exception error)
                 {
@@ -83,21 +88,62 @@ namespace ZeroGame.Networking
             if (config == null || config.EnableSdkLogs) Debug.Log(message);
         }
 
-        // For consumer projects that already initialize TDAnalytics themselves.
-        public static void UseInitializedThinkingData(string appId, bool enableEditorAnalytics = false)
+        // Used when a project supplies all native configuration and has no SDK scene component.
+        internal static BuglySdkSettings ExternalReuseSettings()
         {
+            return new BuglySdkSettings { InitializeOnStartup = false, ReuseBuglyInstance = true,
+                ReuseThinkingDataInstance = true };
+        }
+
+        internal static void RefreshReusedInstances(BuglySdkSettings config, bool reportNetCost)
+        {
+            if (config.EnableBugly && config.ReuseBuglyInstance && Application.platform == RuntimePlatform.Android && !Application.isEditor)
+                RequireReusedBugly();
+            if (config.EnableThinkingData && config.ReuseThinkingDataInstance && reportNetCost &&
+                RequestInitializationGuard.SupportsThinkingData(config, Application.platform == RuntimePlatform.Android && !Application.isEditor, Application.isEditor))
+                BindThinkingData(config.ThinkingAppId, config.EnableEditorAnalytics, true);
+        }
+
+        private static void RequireReusedBugly()
+        {
+            IsInitialized = NativeSdkInstances.BuglyNetworkReady();
+            if (!IsInitialized)
+                throw new InvalidOperationException("[BuglyWebRequest][Reuse.Bugly] 未检测到已启动的 NET_QUALITY 网络监控模块。请先由游戏完成官方 Bugly 初始化并启用该模块，等待模块启动后重试；本 SDK 不会重复初始化或覆盖原生配置。");
+        }
+
+        // For consumer projects that already initialize the official SDK themselves.
+        public static void UseInitializedThinkingData(string appId = "", bool enableEditorAnalytics = false)
+        {
+            BindThinkingData(appId, enableEditorAnalytics, true);
+        }
+
+        private static void BindThinkingData(string appId, bool enableEditorAnalytics, bool nativeReuse)
+        {
+            string id = appId ?? "";
+            if (!NativeSdkInstances.ThinkingReady(id))
+            {
+                ThinkingDataReady = false;
+                throw new InvalidOperationException("[BuglyWebRequest][Reuse.ThinkingData] 未找到已初始化的数数实例（" +
+                    (id.Length == 0 ? "默认实例" : "指定 AppID/实例标识") + "）。请先由游戏初始化官方 SDK；复用模式无需填写 ServerUrl、Mode 或 TimeZone，AppID 留空使用默认实例。");
+            }
+            Reporter.Sink = new ThinkingSink(id, enableEditorAnalytics, nativeReuse);
             ThinkingDataReady = true;
-            Reporter.Sink = new ThinkingSink(appId, enableEditorAnalytics);
         }
 
         private sealed class ThinkingSink : INetCostSink
         {
             private readonly string appId;
-            private readonly bool editorAllowed;
-            public ThinkingSink(string id, bool editor) { appId = id; editorAllowed = editor; }
+            private readonly bool editorAllowed, nativeReuse;
+            public ThinkingSink(string id, bool editor, bool reuse) { appId = id; editorAllowed = editor; nativeReuse = reuse; }
             public bool IsReady { get { return ThinkingDataReady &&
-                (Application.platform == RuntimePlatform.Android || (Application.isEditor && editorAllowed)); } }
-            public void Track(string name, Dictionary<string, object> properties) { TDAnalytics.Track(name, properties, appId); }
+                (Application.platform == RuntimePlatform.Android || (Application.isEditor && editorAllowed)) && NativeSdkInstances.ThinkingReady(appId); } }
+            public void Track(string name, Dictionary<string, object> properties)
+            {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                if (nativeReuse) { NativeSdkInstances.TrackThinking(appId, name, properties); return; }
+#endif
+                TDAnalytics.Track(name, properties, appId);
+            }
         }
     }
 }

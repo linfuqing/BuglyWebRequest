@@ -15,6 +15,8 @@ namespace ZeroGame.Networking
 
         [Header("Bugly 网络监控" )]
         public bool EnableBugly = true;
+        [Tooltip("由游戏先初始化 Bugly 并启用 NET_QUALITY；本 SDK 不再初始化或覆盖原生配置。")]
+        public bool ReuseBuglyInstance;
         public string BuglyAppId = "";
         public string BuglyAppKey = "";
         public BuglyRegion BuglyRegion = BuglyRegion.Overseas;
@@ -26,7 +28,7 @@ namespace ZeroGame.Networking
 
         [Header("数数埋点")]
         public bool EnableThinkingData = true;
-        [Tooltip("仅当游戏已自行初始化数数时勾选；SDK 不再覆盖该实例的 Mode/TimeZone/日志/网络配置。")]
+        [Tooltip("由游戏先初始化数数；AppID 留空使用默认实例，填写时选择对应实例，不覆盖原生配置。")]
         public bool ReuseThinkingDataInstance;
         public string ThinkingAppId = "";
         public string ThinkingServerUrl = "";
@@ -47,15 +49,15 @@ namespace ZeroGame.Networking
 
         public bool Validate(out string error)
         {
-            if (EnableBugly && string.IsNullOrWhiteSpace(BuglyAppId))
+            if (EnableBugly && !ReuseBuglyInstance && string.IsNullOrWhiteSpace(BuglyAppId))
             { error = "EnableBugly 已开启，但 BuglyAppId 为空；请在场景中的 Bugly SDK 组件填写 AppID。"; return false; }
-            if (EnableBugly && string.IsNullOrWhiteSpace(BuglyAppKey))
+            if (EnableBugly && !ReuseBuglyInstance && string.IsNullOrWhiteSpace(BuglyAppKey))
             { error = "EnableBugly 已开启，但 BuglyAppKey 为空；请填写对应 AppKey，或关闭 EnableBugly。"; return false; }
-            if (EnableBugly && !Enum.IsDefined(typeof(BuglyRegion), BuglyRegion))
+            if (EnableBugly && !ReuseBuglyInstance && !Enum.IsDefined(typeof(BuglyRegion), BuglyRegion))
             { error = "BuglyRegion 无效；请选择 Overseas 或 Domestic。"; return false; }
             if (EnableThinkingData)
             {
-                if (string.IsNullOrWhiteSpace(ThinkingAppId)) { error = "EnableThinkingData 已开启，但 ThinkingAppId 为空；请填写需要上报的数数项目 AppID。"; return false; }
+                if (!ReuseThinkingDataInstance && string.IsNullOrWhiteSpace(ThinkingAppId)) { error = "EnableThinkingData 已开启，但 ThinkingAppId 为空；请填写需要上报的数数项目 AppID。"; return false; }
                 if (!ReuseThinkingDataInstance)
                 {
                     Uri uri;

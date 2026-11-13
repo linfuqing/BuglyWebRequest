@@ -17,7 +17,11 @@ https://github.com/linfuqing/BuglyWebRequest.git
 
 —— 2. 配置 SDK
 
-将包内 `Runtime/Prefabs/BuglySDK.prefab` 拖入启动场景，在 Inspector 中填写配置。只需放一份，会跨场景保留。
+由本 SDK 初始化：将包内 `Runtime/Prefabs/BuglyWebRequest.prefab` 拖入启动场景，在 Inspector 中填写配置，只需放一份。
+
+Android 已有原生初始化：无需挂载 Prefab，先完成官方 Bugly（启用 NET_QUALITY）和数数默认实例初始化，再调用 Trace / Post，SDK 会自动复用。不修改原生 AppID、AppKey、地区、Mode、TimeZone 等配置。
+
+需要自定义超时等参数或选择数数实例时，仍可挂 Prefab，开启 Reuse Bugly Instance / Reuse Thinking Data Instance。复用时 Bugly 账号无需填写；数数 AppID 留空使用默认实例，填写可选择对应实例。原生实例未就绪时会明确报错，请求不会发送。
 
 开启 **InitializeOnStartup** 自动初始化，业务请求在初始化后发送。关闭时，在玩家同意隐私政策后调用：
 
@@ -30,6 +34,7 @@ BuglySdkManager.Instance.InitializeAfterConsent();
 | 配置 | 说明 |
 | --- | --- |
 | Enable Bugly | 启用 Bugly 网络监控。 |
+| Reuse Bugly Instance | 复用游戏已初始化的 Bugly，不重复初始化或覆盖配置。 |
 | Bugly AppID / AppKey | Bugly 后台「设置 > 产品信息」中的 APP ID / APP KEY。 |
 | Bugly Region | Overseas：海外版；Domestic：国内版，按应用所属版本选择。 |
 | Bugly Debug Mode | Bugly 调试模式，测试时按需开启。 |
@@ -44,7 +49,7 @@ BuglySdkManager.Instance.InitializeAfterConsent();
 | Thinking App Id / Server Url | 数数项目提供的 APP_ID 和数据接收地址。 |
 | Thinking Mode | Normal：正常上报；Debug：调试且入库；DebugOnly：调试不入库。 |
 | Thinking Time Zone | Local：设备时区；UTC：UTC 时区；Other：填写 Time Zone Id。 |
-| Reuse Thinking Data Instance | 游戏已自行初始化相同 AppID 的数数实例时开启，沿用该实例的配置。 |
+| Reuse Thinking Data Instance | 复用已初始化的数数；AppID 留空使用默认实例，填写选择对应实例，不覆盖配置。 |
 | Thinking Network Type | 数数数据上报使用的网络类型。 |
 | Thinking Enable Log | 输出数数 SDK 日志。 |
 | Enable Editor Analytics | 允许在 Unity Editor 中初始化数数并上报埋点。 |

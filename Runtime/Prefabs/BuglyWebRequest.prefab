@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 1982749898001535691}
   - component: {fileID: 2357944899181830338}
   m_Layer: 0
-  m_Name: BuglySDK
+  m_Name: BuglyWebRequest
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -47,6 +47,7 @@ MonoBehaviour:
   Settings:
     InitializeOnStartup: 1
     EnableBugly: 1
+    ReuseBuglyInstance: 0
     BuglyAppId: 
     BuglyAppKey: 
     BuglyRegion: 0

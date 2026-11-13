@@ -5,6 +5,10 @@ import com.tencent.bugly.network.*;
 
 public final class SdkBridge {
     private static boolean ready;
+    /** Existing native initialization must already have started network monitoring. No init/config writes. */
+    public static synchronized boolean reuseInitialized() {
+        return Bugly.checkAllPluginStarted(java.util.Collections.singletonList(BuglyMonitorName.NET_QUALITY));
+    }
     public static synchronized boolean initialize(Context context,String appId,String appKey,String version,boolean debug,boolean development,boolean overseas,boolean nativeLogs,String userId,boolean filterLocalRequests) {
         if (ready) return true;
         BuglyBuilder builder=new BuglyBuilder(appId,appKey);

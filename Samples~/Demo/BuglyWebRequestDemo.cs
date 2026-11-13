@@ -14,7 +14,7 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
     private string urlText = "";
     private HttpTransport transport;
     private BuglyWebRequest active;
-    private string status = "先将 BuglySDK.prefab 拖入场景并填写配置；编辑器请求使用 UnityWebRequest。";
+    private string status = "可使用已有原生初始化，或将 BuglyWebRequest.prefab 拖入场景配置；编辑器使用 UnityWebRequest。";
 
     private void Awake()
     {
@@ -45,7 +45,7 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
         GUI.matrix = Matrix4x4.Scale(Vector3.one * scale);
         GUILayout.BeginArea(new Rect(15, 15, 750, 720), GUI.skin.box);
         GUILayout.Label("Bugly WebRequest SDK 0.4.1 — 统一配置测试");
-        GUILayout.Label(Settings == null ? "未找到配置：将 Runtime/Prefabs/BuglySDK.prefab 拖入场景" : "配置：场景中的 Bugly SDK 组件");
+        GUILayout.Label(Settings == null ? "无配置组件：使用已初始化的 Bugly 和数数默认原生实例" : "配置：场景中的 Bugly SDK 组件");
         if (Settings != null)
         {
             GUILayout.Label("数数 Mode=" + Settings.ThinkingMode + "，TimeZone=" + Settings.ThinkingTimeZone + "，复用实例=" + Settings.ReuseThinkingDataInstance);
