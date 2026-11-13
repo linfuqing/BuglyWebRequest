@@ -1,22 +1,29 @@
 Bugly WebRequest + ThinkingData
 
-——1. 导入 SDK
+——1. 一键导入 SDK
 
-打开 **Window > Package Manager > + > Add package from git URL**，请按顺序添加！！！：
+打开 **Window > Package Manager > + > Add package from git URL**，只添加安装器地址：
 
-1. Bugly Android 适配包（我们自己的桥接代码；Bugly 原生 SDK 由 Android 构建时从 Maven Central 下载，不随本仓库分发）：
-   ```text
-   https://github.com/linfuqing/BuglyWebRequest.git?path=/Dependencies~/cn.com.zerogame.bugly-android
-   ```
-2. 数数官方 3.5.0（已有相同版本可跳过）：
-   ```text
-   https://github.com/ThinkingDataAnalytics/unity-sdk.git#v3.5.0
-   ```
+```text
+https://github.com/linfuqing/BuglyWebRequest.git?path=/Installer~
+```
+
+导入后在自动打开的安装器窗口点击 **一键安装 / 修复 SDK 与依赖**，等待完成。没有弹出窗口时，打开 **Tools > Bugly WebRequest > Install SDK And Dependencies**。
+
+安装器会统一安装主 SDK、自有 Bugly Android 适配包，以及数数官方 Git 3.5.0；不需要逐个添加 URL。Bugly 原生 SDK 仍在 Android 构建时从 Maven Central 下载。
+已有本地/内嵌包时需先自行备份并移走；已有不同版本时，确认替换后勾选安装器中的对应选项。
+
+<details>
+<summary>手动安装（可选，按顺序添加）</summary>
+
+1. 自有 Bugly Android 适配包：
+   `https://github.com/linfuqing/BuglyWebRequest.git?path=/Dependencies~/cn.com.zerogame.bugly-android`
+2. 数数官方 SDK：
+   `https://github.com/ThinkingDataAnalytics/unity-sdk.git#v3.5.0`
 3. 主 SDK：
-   ```text
-   https://github.com/linfuqing/BuglyWebRequest.git
-   ```
+   `https://github.com/linfuqing/BuglyWebRequest.git`
 
+</details>
 ——2. 配置 Prefab
 
 将主 SDK 中的 `Runtime/Prefabs/BuglySDK.prefab` 拖入启动场景，或通过 **Tools > Bugly WebRequest > Add SDK Prefab To Scene** 添加。
