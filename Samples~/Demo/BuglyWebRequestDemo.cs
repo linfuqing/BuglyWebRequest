@@ -8,9 +8,8 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
     public bool DrawUI = true;
     private BuglySdkSettings Settings { get { return BuglySdkManager.CurrentSettings; } }
     public string EventName = "test_post";
-    public string[] Urls = new string[0];
+    public string Url = "";
     private bool useTextConfig = true;
-    private string explicitUrlText = "";
     private string[] urls = new string[0];
     private string urlText = "";
     private HttpTransport transport;
@@ -20,7 +19,6 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
     private void Awake()
     {
         if (Settings != null) transport = Settings.DefaultRequest.Transport;
-        explicitUrlText = string.Join("\n", Urls ?? new string[0]);
         TryLoadUrls();
     }
     private bool TryLoadUrls()
@@ -68,9 +66,8 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
         }
         else
         {
-            GUILayout.Label("显式 URL：每行一个，不读取文本配置");
-            explicitUrlText = GUILayout.TextArea(explicitUrlText, GUILayout.Height(100));
-            Urls = explicitUrlText.Split(new[] {'\r', '\n'}, System.StringSplitOptions.RemoveEmptyEntries);
+            GUILayout.Label("单个 URL：不读取文本配置");
+            Url = GUILayout.TextField(Url);
             transport = (HttpTransport)GUILayout.SelectionGrid((int)transport, new[] { "OkHttp", "URLConnection" }, 2);
         }
         GUI.enabled = active == null;
@@ -86,7 +83,7 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
         WWWForm form = null;
         if (!textMode) { form = new WWWForm(); form.AddField("function", 111); }
         BuglyWebRequest request;
-        try { request = textMode ? BuglyWebRequest.Trace(EventName) : BuglyWebRequest.Trace(EventName, form, Urls); }
+        try { request = textMode ? BuglyWebRequest.Trace(EventName) : BuglyWebRequest.Post(EventName, form, Url); }
         catch (System.Exception error) { status = error.Message; yield break; }
         active = request;
         using (request)

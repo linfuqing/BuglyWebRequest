@@ -70,7 +70,7 @@ namespace ZeroGame.Networking
                 return RequestResult.Success;
             }
         }
-        public int Timeout { get { return Options.TimeoutSeconds; } set { if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest] 请求已释放，不能修改 Timeout；请创建新的 Trace 请求。"); if (sent) throw new InvalidOperationException("[BuglyWebRequest] 请求已启动，不能再修改 Timeout；手动入口请在 SendWebRequest() 之前设置，自动入口请在场景 SDK 组件的 DefaultRequest 中配置。"); Options.TimeoutSeconds = value; } }
+        public int Timeout { get { return Options.TimeoutSeconds; } set { if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest] 请求已释放，不能修改 Timeout；请创建新的请求。"); if (sent) throw new InvalidOperationException("[BuglyWebRequest] 请求已启动，不能再修改 Timeout；手动入口请在 SendWebRequest() 之前设置，自动入口请在场景 SDK 组件的 DefaultRequest 中配置。"); Options.TimeoutSeconds = value; } }
 
         private BuglyWebRequest(string eventName, WWWForm form, string[] urls)
         {
@@ -81,15 +81,7 @@ namespace ZeroGame.Networking
             for (int index = 0; index < this.urls.Length; index++)
             {
                 string url = this.urls[index];
-                if (string.IsNullOrWhiteSpace(url))
-                    throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 为空；请填写完整 HTTP(S) 地址。", "urls");
-                Uri parsed;
-                if (!Uri.TryCreate(url, UriKind.Absolute, out parsed) || string.IsNullOrEmpty(parsed.Host))
-                    throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 不是包含主机名的完整 URL；格式应为 http://host/path 或 https://host/path。", "urls");
-                if (parsed.Scheme != "http" && parsed.Scheme != "https")
-                    throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 使用了不支持的协议 " + parsed.Scheme + "；仅支持 http 和 https。", "urls");
-                foreach (char character in url)
-                    if (char.IsWhiteSpace(character)) throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 包含空白字符；请移除空格、换行或行内注释，需要的空格请进行 URL 编码。", "urls");
+                ValidateUrl(url, "urls", "[BuglyWebRequest] urls[" + index + "]");
             }
             if (form == null)
             {
@@ -108,14 +100,14 @@ namespace ZeroGame.Networking
                 }
                 catch (Exception error)
                 {
-                    throw new InvalidOperationException("[BuglyWebRequest][Trace.FormSerialization] eventName='" + eventName + "'：无法读取 WWWForm 的请求体或请求头。请在 Unity 主线程创建并调用请求。原始原因：" + error.Message, error);
+                    throw new InvalidOperationException("[BuglyWebRequest][Request.FormSerialization] eventName='" + eventName + "'：无法读取 WWWForm 的请求体或请求头。请在 Unity 主线程创建并调用请求。原始原因：" + error.Message, error);
                 }
             }
             responses = new BuglyResponse[urls.Length]; clocks = new Stopwatch[urls.Length];
             try { Options = BuglySdkManager.CreateRequestOptions(); }
             catch (Exception error)
             {
-                throw new InvalidOperationException("[BuglyWebRequest][Trace.DefaultRequest] eventName='" + eventName + "'：无法读取场景 SDK 组件的 DefaultRequest。原始原因：" + error.Message, error);
+                throw new InvalidOperationException("[BuglyWebRequest][Request.DefaultRequest] eventName='" + eventName + "'：无法读取场景 SDK 组件的 DefaultRequest。原始原因：" + error.Message, error);
             }
         }
 
@@ -137,21 +129,17 @@ namespace ZeroGame.Networking
             return StartOwned(new BuglyWebRequest(eventName, form, configuredUrls));
         }
 
-        // Explicit URLs never read or fall back to text configuration. Configure, then send.
-        public static BuglyWebRequest Trace(string eventName, WWWForm form, params string[] urls)
+        /// <summary>创建单地址 POST 请求；设置参数后调用 SendWebRequest() 才开始发送。</summary>
+        /// <param name="eventName">本次请求的埋点标识。</param>
+        /// <param name="form">发送给服务器的表单参数；无字段时传 new WWWForm()。</param>
+        /// <param name="url">单个完整 HTTP(S) 地址，不读取文本 URL 配置。</param>
+        public static BuglyWebRequest Post(string eventName, WWWForm form, string url)
         {
-            if (form == null) throw new ArgumentNullException("form", "[BuglyWebRequest] 显式 URL 入口要求非 null 的 WWWForm；没有字段时传 new WWWForm()。无需表单且读取文本地址时使用 Trace(eventName)。");
-            return new BuglyWebRequest(eventName, form, urls);
-        }
-
-        // Callback convenience API. Each URL invokes its final callback once, after retries.
-        public static BuglyWebRequest Trace(string eventName, WWWForm form, string[] urls, Action<BuglyResponse> onComplete)
-        {
-            if (form == null) throw new ArgumentNullException("form", "[BuglyWebRequest] 显式 URL 入口要求非 null 的 WWWForm；没有字段时传 new WWWForm()。无需表单且读取文本地址时使用 Trace(eventName)。");
-            if (onComplete == null) throw new ArgumentNullException("onComplete", "[BuglyWebRequest] 回调入口的 onComplete 不能为 null；不需要回调时使用 Trace(eventName)，或用手动入口 Trace(eventName, form, urls)。");
-            var request = new BuglyWebRequest(eventName, form, urls);
-            request.UrlCompleted += onComplete;
-            return StartOwned(request);
+            ValidateEventName(eventName);
+            if (form == null) throw new ArgumentNullException("form", "[BuglyWebRequest][Post] form 不能为 null；没有字段时传 new WWWForm()。读取文本地址并自动发送请使用 Trace(eventName)。");
+            if (url == null) throw new ArgumentNullException("url", "[BuglyWebRequest][Post] url 不能为 null；请传入单个完整 HTTP(S) 地址，不读取文本配置。");
+            ValidateUrl(url, "url", "[BuglyWebRequest][Post] url");
+            return new BuglyWebRequest(eventName, form, new[] { url });
         }
 
         private static BuglyWebRequest StartOwned(BuglyWebRequest request)
@@ -180,8 +168,8 @@ namespace ZeroGame.Networking
         // Unity main thread only. Requests are started once and complete independently.
         public BuglyWebRequestOperation SendWebRequest()
         {
-            if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：请求已被 Dispose 或自动释放，不能再次发送；请创建新的 Trace 请求。");
-            if (sent) throw new InvalidOperationException("[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：同一个请求只能启动一次。Trace(eventName)、Trace(eventName, form) 和带回调的入口已自动启动，不要再调用 SendWebRequest()。");
+            if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：请求已被 Dispose 或自动释放，不能再次发送；请创建新的请求。");
+            if (sent) throw new InvalidOperationException("[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：同一个请求只能启动一次。Trace(eventName) 和 Trace(eventName, form) 已自动启动，不要再调用 SendWebRequest()。");
             snapshot = Options.Snapshot();
             var config = RequestInitializationGuard.EnsureReady(eventName, snapshot);
             bool androidPlayer = Application.platform == RuntimePlatform.Android && !Application.isEditor;
@@ -209,6 +197,19 @@ namespace ZeroGame.Networking
             BuglySdk.LogInfo("[BuglyWebRequest] UnityWebRequest fallback (Editor/WebGL/desktop); urls=" + urls.Length);
 #endif
             return operation;
+        }
+
+        private static void ValidateUrl(string url, string parameter, string context)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                throw new ArgumentException(context + " 为空；请填写完整 HTTP(S) 地址。", parameter);
+            Uri parsed;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out parsed) || string.IsNullOrEmpty(parsed.Host))
+                throw new ArgumentException(context + " 不是包含主机名的完整 URL；格式应为 http://host/path 或 https://host/path。", parameter);
+            if (parsed.Scheme != "http" && parsed.Scheme != "https")
+                throw new ArgumentException(context + " 使用了不支持的协议 " + parsed.Scheme + "；仅支持 http 和 https。", parameter);
+            foreach (char character in url)
+                if (char.IsWhiteSpace(character)) throw new ArgumentException(context + " 包含空白字符；请移除空格、换行或行内注释，需要的空格请进行 URL 编码。", parameter);
         }
 
         private static void ValidateEventName(string eventName)
