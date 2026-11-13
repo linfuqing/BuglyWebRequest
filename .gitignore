@@ -1,0 +1,11 @@
+Library/
+Temp/
+Obj/
+Logs/
+Artifacts/
+.vs/
+*.csproj
+*.sln
+*.apk
+*.aab
+.DS_Store

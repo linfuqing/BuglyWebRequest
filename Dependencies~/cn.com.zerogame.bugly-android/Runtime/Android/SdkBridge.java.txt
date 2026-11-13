@@ -1,0 +1,34 @@
+package cn.zero3d.buglywebrequest;
+import android.content.Context;
+import com.tencent.bugly.library.*;
+import com.tencent.bugly.network.*;
+
+public final class SdkBridge {
+    private static boolean ready;
+    public static synchronized boolean initialize(Context context,String appId,String appKey,String version,boolean debug,boolean development,boolean overseas,boolean nativeLogs,String userId,boolean filterLocalRequests) {
+        if (ready) return true;
+        BuglyBuilder builder=new BuglyBuilder(appId,appKey);
+        builder.userId=userId==null?"":userId;
+        builder.setServerHostType(overseas?BuglyBuilder.ServerHostTypeBuglyOversea:BuglyBuilder.ServerHostTypeBuglyPro);
+        builder.appVersion=version; builder.debugMode=debug;
+        builder.logLevel=nativeLogs?BuglyLogLevel.LEVEL_VERBOS:BuglyLogLevel.LEVEL_WARN;
+        builder.appVersionType=development?BuglyAppVersionMode.DEBUG:BuglyAppVersionMode.RELEASE;
+        for (String module : new String[] { BuglyMonitorName.FLUENCY_METRIC,BuglyMonitorName.LOOPER_STACK,
+            BuglyMonitorName.LAUNCH,BuglyMonitorName.MEMORY_METRIC,BuglyMonitorName.MEMORY_METRIC_OF_SUB_PROCESS,
+            BuglyMonitorName.MEMORY_JAVA_LEAK,BuglyMonitorName.MEMORY_BIG_BITMAP,BuglyMonitorName.FD_ANALYZE,
+            BuglyMonitorName.NATIVE_MEMORY_ANALYZE,BuglyMonitorName.ASAN,BuglyMonitorName.TRAFFIC,
+            BuglyMonitorName.TRAFFIC_DETAIL,BuglyMonitorName.BATTERY_METRIC,BuglyMonitorName.BATTERY_ELEMENT_METRIC,
+            BuglyMonitorName.BATTERY_ELEMENT,BuglyMonitorName.MEMORY_JAVA_CEILING,BuglyMonitorName.PAGE_LAUNCH,
+            BuglyMonitorName.CUSTOM_EVENT,BuglyMonitorName.SSE }) builder.removeMonitor(module);
+        builder.addMonitor(BuglyMonitorName.NET_QUALITY);
+        if (!Bugly.init(context.getApplicationContext(),builder)) return false;
+        NetQualityUserConfig config=new NetQualityUserConfig();
+        config.enableHookURLConnection=true; config.enableWrapInputStream=true; config.enableWrapOutputStream=true;
+        config.enableAppendTraceParent=false; config.enableAppendTraceState=false; config.enableAppendSW8=false;
+        config.isTraceSample=false; config.filterLocalhostRequests=filterLocalRequests; config.isDebug=false;
+        ClientBuilder.setUserConfig(config);
+        if (nativeLogs) android.util.Log.i("BuglyWebRequestNative","Bugly.init returned true; nativeLogLevel=VERBOSE; region=" + (overseas?"overseas":"domestic") +
+            "; versionType=" + builder.appVersionType + "; NET_QUALITY requested; remote enablement and ingestion not verified" );
+        ready=true; return true;
+    }
+}

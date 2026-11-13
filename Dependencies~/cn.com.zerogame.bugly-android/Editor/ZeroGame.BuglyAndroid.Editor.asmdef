@@ -1,0 +1,7 @@
+{
+  "name": "ZeroGame.BuglyAndroid.Editor",
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

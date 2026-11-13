@@ -1,0 +1,11 @@
+{
+  "name": "ZeroGame.BuglyWebRequest.Editor",
+  "references": [
+    "ZeroGame.BuglyWebRequest",
+    "ThinkingAnalytics"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

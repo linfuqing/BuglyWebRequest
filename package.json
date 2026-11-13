@@ -1,0 +1,20 @@
+{
+  "name": "cn.com.zerogame.bugly-webrequest",
+  "version": "0.3.0",
+  "displayName": "Bugly WebRequest + ThinkingData",
+  "description": "Android OkHttp/URLConnection requests with Bugly network monitoring and deduplicated net_cost events.",
+  "unity": "2022.3",
+  "dependencies": {
+    "com.thinkingdata.analytics": "3.5.0",
+    "cn.com.zerogame.bugly-android": "4.4.8"
+  },
+  "samples": [
+    {
+      "displayName": "Bugly WebRequest Demo",
+      "description": "Configuration-driven initialization and independent multi-URL test requests.",
+      "path": "Samples~/Demo"
+    }
+  ],
+  "documentationUrl": "https://github.com/linfuqing/BuglyWebRequest#readme",
+  "changelogUrl": "https://github.com/linfuqing/BuglyWebRequest/blob/main/CHANGELOG.md"
+}
