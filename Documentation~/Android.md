@@ -11,5 +11,5 @@ Android 构建时自动复制 Java 桥接源文件，配置权限、混淆保留
 
 主 SDK 版本为 0.4.1；缺失时默认接入的原生 Bugly 版本为 4.4.8.2。
 需要 Android 构建环境能够访问 Google / Maven Central 仓库。
-配置和初始化由主 SDK 的 BuglySDK.prefab 负责。
+可由 BuglyWebRequest.prefab 初始化；已有官方原生初始化时可直接复用，无需挂载 Prefab。Bugly 需已启动 NET_QUALITY，数数需已初始化默认实例；两种复用均不覆盖原生配置。
 仓库仅包含 ZeroGame 自有适配代码。Bugly、OkHttp、SSE 从 Maven Central 下载，遵循各供应商许可。Bugly 官方接入文档：https://bugly.tds.tencent.com/docs/sdk/android/
