@@ -15,7 +15,7 @@ namespace ZeroGame.Networking.Editor
         public void OnPostGenerateGradleAndroidProject(string path)
         {
             var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(AndroidBuild).Assembly);
-            if (package == null) throw new InvalidOperationException("SDK package root not found");
+            if (package == null) throw new InvalidOperationException("[BuglyAndroid][GradleExport] 无法定位 AndroidBuild 所在的适配包。请确认 cn.com.zerogame.bugly-android 已通过 Package Manager 安装，不要单独复制构建脚本。");
             var javaPath = Path.Combine(path, "src/main/java/cn/zero3d/buglywebrequest");
             Directory.CreateDirectory(javaPath);
             foreach (var name in new[] { "WireBridge", "SdkBridge" })
@@ -24,7 +24,7 @@ namespace ZeroGame.Networking.Editor
             var xml = new XmlDocument();
             var manifest = Path.Combine(path, "src/main/AndroidManifest.xml"); xml.Load(manifest);
             var app = xml.DocumentElement.SelectSingleNode("application") as XmlElement;
-            if (app == null) throw new InvalidOperationException("Missing application in manifest");
+            if (app == null) throw new InvalidOperationException("[BuglyAndroid][GradleExport] AndroidManifest.xml 缺少 application 节点，无法配置网络权限和 HTTP 策略。文件：" + manifest);
             bool cleartext = PlayerSettings.insecureHttpOption == InsecureHttpOption.AlwaysAllowed ||
                 (PlayerSettings.insecureHttpOption == InsecureHttpOption.DevelopmentOnly && EditorUserBuildSettings.development);
             app.SetAttribute("usesCleartextTraffic", ns, cleartext ? "true" : "false");

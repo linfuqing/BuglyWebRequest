@@ -16,12 +16,6 @@ namespace ZeroGame.Networking
         public bool IsDone { get { return WebRequest.IsDone; } }
         public override bool keepWaiting { get { return !IsDone; } }
         public event Action<BuglyWebRequestOperation> Completed;
-        [Obsolete("Use WebRequest instead.")]
-        public BuglyWebRequest webRequest { get { return WebRequest; } }
-        [Obsolete("Use IsDone instead.")]
-        public bool isDone { get { return IsDone; } }
-        [Obsolete("Use Completed instead.")]
-        public event Action<BuglyWebRequestOperation> completed { add { Completed += value; } remove { Completed -= value; } }
         internal BuglyWebRequestOperation(BuglyWebRequest owner) { WebRequest = owner; }
         internal void Complete()
         {
@@ -34,14 +28,14 @@ namespace ZeroGame.Networking
 
     public sealed class BuglyWebRequest : IDisposable
     {
-        private readonly string api;
+        private readonly string eventName;
         private readonly string[] urls, headerNames, headerValues;
         private readonly byte[] body;
         private readonly BuglyResponse[] responses;
         private readonly ConcurrentQueue<BuglyResponse> incoming = new ConcurrentQueue<BuglyResponse>();
         private readonly List<UnityWebRequest> managedRequests = new List<UnityWebRequest>();
         private readonly Stopwatch[] clocks;
-        private bool sent, disposed, aborted, autoDispose;
+        private bool sent, disposed, aborted, autoDispose, reportNetCost;
         private int count;
         private RequestOptions snapshot;
         private BuglyWebRequestOperation operation;
@@ -76,60 +70,86 @@ namespace ZeroGame.Networking
                 return RequestResult.Success;
             }
         }
-        public int Timeout { get { return Options.TimeoutSeconds; } set { if (sent) throw new InvalidOperationException("Already sent"); Options.TimeoutSeconds = value; } }
+        public int Timeout { get { return Options.TimeoutSeconds; } set { if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest] 请求已释放，不能修改 Timeout；请创建新的 Trace 请求。"); if (sent) throw new InvalidOperationException("[BuglyWebRequest] 请求已启动，不能再修改 Timeout；手动入口请在 SendWebRequest() 之前设置，自动入口请在场景 SDK 组件的 DefaultRequest 中配置。"); Options.TimeoutSeconds = value; } }
 
-        [Obsolete("Use IsDone instead.")]
-        public bool isDone { get { return IsDone; } }
-        [Obsolete("Use Progress instead.")]
-        public float progress { get { return Progress; } }
-        [Obsolete("Use DownloadHandler instead.")]
-        public BuglyDownloadHandler downloadHandler { get { return DownloadHandler; } }
-        [Obsolete("Use ResponseCode instead.")]
-        public long responseCode { get { return ResponseCode; } }
-        [Obsolete("Use Error instead.")]
-        public string error { get { return Error; } }
-        [Obsolete("Use Result instead.")]
-        public RequestResult result { get { return Result; } }
-        [Obsolete("Use Timeout instead.")]
-        public int timeout { get { return Timeout; } set { Timeout = value; } }
-
-        private BuglyWebRequest(string api, WWWForm form, string[] urls)
+        private BuglyWebRequest(string eventName, WWWForm form, string[] urls)
         {
-            if (string.IsNullOrWhiteSpace(api) || api.Length > 120 || api.IndexOfAny(new[] {'\n','\r',' '}) >= 0)
-                throw new ArgumentException("Use a stable non-empty API name without whitespace", "api");
-            if (form == null || urls == null || urls.Length == 0) throw new ArgumentException("Form and at least one URL required");
-            this.api = api; this.urls = (string[])urls.Clone();
-            foreach (string url in this.urls)
+            ValidateEventName(eventName);
+            if (urls == null) throw new ArgumentNullException("urls", "[BuglyWebRequest] 显式 URL 入口的 urls 不能为 null；请传入至少一个 HTTP(S) 地址。读取文本配置请使用 Trace(eventName)。");
+            if (urls.Length == 0) throw new ArgumentException("[BuglyWebRequest] urls 数组为空；请传入至少一个 HTTP(S) 地址，显式入口不会回退到文本配置。", "urls");
+            this.eventName = eventName; this.urls = (string[])urls.Clone();
+            for (int index = 0; index < this.urls.Length; index++)
             {
+                string url = this.urls[index];
+                if (string.IsNullOrWhiteSpace(url))
+                    throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 为空；请填写完整 HTTP(S) 地址。", "urls");
                 Uri parsed;
-                if (!Uri.TryCreate(url, UriKind.Absolute, out parsed) || (parsed.Scheme != "http" && parsed.Scheme != "https"))
-                    throw new ArgumentException("Only absolute HTTP(S) URLs are supported");
+                if (!Uri.TryCreate(url, UriKind.Absolute, out parsed) || string.IsNullOrEmpty(parsed.Host))
+                    throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 不是包含主机名的完整 URL；格式应为 http://host/path 或 https://host/path。", "urls");
+                if (parsed.Scheme != "http" && parsed.Scheme != "https")
+                    throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 使用了不支持的协议 " + parsed.Scheme + "；仅支持 http 和 https。", "urls");
+                foreach (char character in url)
+                    if (char.IsWhiteSpace(character)) throw new ArgumentException("[BuglyWebRequest] urls[" + index + "] 包含空白字符；请移除空格、换行或行内注释，需要的空格请进行 URL 编码。", "urls");
             }
-            body = (byte[])form.data.Clone();
-            var headers = form.headers;
-            headerNames = new string[headers.Count]; headerValues = new string[headers.Count];
-            int i = 0;
-            foreach (var pair in headers) { headerNames[i] = pair.Key; headerValues[i++] = pair.Value; }
-            responses = new BuglyResponse[urls.Length]; clocks = new Stopwatch[urls.Length]; Options = BuglySdkManager.CreateRequestOptions();
+            if (form == null)
+            {
+                body = new byte[0];
+                headerNames = new string[0]; headerValues = new string[0];
+            }
+            else
+            {
+                try
+                {
+                    body = (byte[])form.data.Clone();
+                    var headers = form.headers;
+                    headerNames = new string[headers.Count]; headerValues = new string[headers.Count];
+                    int i = 0;
+                    foreach (var pair in headers) { headerNames[i] = pair.Key; headerValues[i++] = pair.Value; }
+                }
+                catch (Exception error)
+                {
+                    throw new InvalidOperationException("[BuglyWebRequest][Trace.FormSerialization] eventName='" + eventName + "'：无法读取 WWWForm 的请求体或请求头。请在 Unity 主线程创建并调用请求。原始原因：" + error.Message, error);
+                }
+            }
+            responses = new BuglyResponse[urls.Length]; clocks = new Stopwatch[urls.Length];
+            try { Options = BuglySdkManager.CreateRequestOptions(); }
+            catch (Exception error)
+            {
+                throw new InvalidOperationException("[BuglyWebRequest][Trace.DefaultRequest] eventName='" + eventName + "'：无法读取场景 SDK 组件的 DefaultRequest。原始原因：" + error.Message, error);
+            }
         }
 
         // One-line HTTP dispatch: read configured URLs, start immediately, and own cleanup.
-        public static BuglyWebRequest Post(string api, WWWForm form)
+        public static BuglyWebRequest Trace(string eventName)
         {
-            return StartOwned(new BuglyWebRequest(api, form, BuglyUrlConfig.Load()));
+            return Trace(eventName, null);
+        }
+
+        public static BuglyWebRequest Trace(string eventName, WWWForm form)
+        {
+            ValidateEventName(eventName);
+            string[] configuredUrls;
+            try { configuredUrls = BuglyUrlConfig.Load(); }
+            catch (Exception error)
+            {
+                throw new InvalidOperationException("[BuglyWebRequest][Trace.UrlConfiguration] eventName='" + eventName + "'：读取文本 URL 配置失败。原始原因：" + error.Message, error);
+            }
+            return StartOwned(new BuglyWebRequest(eventName, form, configuredUrls));
         }
 
         // Explicit URLs never read or fall back to text configuration. Configure, then send.
-        public static BuglyWebRequest Post(string api, WWWForm form, params string[] urls)
+        public static BuglyWebRequest Trace(string eventName, WWWForm form, params string[] urls)
         {
-            return new BuglyWebRequest(api, form, urls);
+            if (form == null) throw new ArgumentNullException("form", "[BuglyWebRequest] 显式 URL 入口要求非 null 的 WWWForm；没有字段时传 new WWWForm()。无需表单且读取文本地址时使用 Trace(eventName)。");
+            return new BuglyWebRequest(eventName, form, urls);
         }
 
         // Callback convenience API. Each URL invokes its final callback once, after retries.
-        public static BuglyWebRequest Post(string api, WWWForm form, string[] urls, Action<BuglyResponse> onComplete)
+        public static BuglyWebRequest Trace(string eventName, WWWForm form, string[] urls, Action<BuglyResponse> onComplete)
         {
-            if (onComplete == null) throw new ArgumentNullException("onComplete");
-            var request = new BuglyWebRequest(api, form, urls);
+            if (form == null) throw new ArgumentNullException("form", "[BuglyWebRequest] 显式 URL 入口要求非 null 的 WWWForm；没有字段时传 new WWWForm()。无需表单且读取文本地址时使用 Trace(eventName)。");
+            if (onComplete == null) throw new ArgumentNullException("onComplete", "[BuglyWebRequest] 回调入口的 onComplete 不能为 null；不需要回调时使用 Trace(eventName)，或用手动入口 Trace(eventName, form, urls)。");
+            var request = new BuglyWebRequest(eventName, form, urls);
             request.UrlCompleted += onComplete;
             return StartOwned(request);
         }
@@ -137,15 +157,37 @@ namespace ZeroGame.Networking
         private static BuglyWebRequest StartOwned(BuglyWebRequest request)
         {
             request.autoDispose = true;
-            try { request.SendWebRequest(); return request; }
-            catch { request.Dispose(); throw; }
+            try
+            {
+                request.SendWebRequest();
+                return request;
+            }
+            catch (Exception startError)
+            {
+                Exception cleanupError = null;
+                try { request.Dispose(); }
+                catch (Exception error) { cleanupError = error; }
+                string context = "[BuglyWebRequest][Trace.AutoStart] eventName='" + request.eventName +
+                    "', transport=" + request.Options.Transport + ", urlCount=" + request.urls.Length +
+                    "：自动发送启动失败。原始异常 " + startError.GetType().Name + "：" + startError.Message;
+                if (cleanupError != null)
+                    throw new InvalidOperationException(context + "；释放请求时又发生 " + cleanupError.GetType().Name + "：" + cleanupError.Message + "。两个异常均保留在 InnerException 中。",
+                        new AggregateException("请求启动与失败清理分别发生异常。", startError, cleanupError));
+                throw new InvalidOperationException(context, startError);
+            }
         }
 
         // Unity main thread only. Requests are started once and complete independently.
         public BuglyWebRequestOperation SendWebRequest()
         {
-            if (sent || disposed) throw new InvalidOperationException("Request already sent or disposed");
-            snapshot = Options.Snapshot(); sent = true;
+            if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：请求已被 Dispose 或自动释放，不能再次发送；请创建新的 Trace 请求。");
+            if (sent) throw new InvalidOperationException("[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：同一个请求只能启动一次。Trace(eventName)、Trace(eventName, form) 和带回调的入口已自动启动，不要再调用 SendWebRequest()。");
+            snapshot = Options.Snapshot();
+            var config = RequestInitializationGuard.EnsureReady(eventName, snapshot);
+            bool androidPlayer = Application.platform == RuntimePlatform.Android && !Application.isEditor;
+            reportNetCost = config.EnableThinkingData && snapshot.ReportNetCost &&
+                RequestInitializationGuard.SupportsThinkingData(config, androidPlayer, Application.isEditor);
+            sent = true;
             operation = new BuglyWebRequestOperation(this);
             var runner = RequestRunner.Ensure(); runner.Add(this);
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -157,9 +199,9 @@ namespace ZeroGame.Networking
                     using (var bridge = new AndroidJavaClass("cn.zero3d.buglywebrequest.WireBridge"))
                         jobs.Add(bridge.CallStatic<AndroidJavaObject>("submit", i, urls[i], body, headerNames, headerValues,
                             (int)snapshot.Transport, snapshot.TimeoutSeconds, snapshot.MaxAttempts, snapshot.RetryDelayMs,
-                            snapshot.MaxResponseBytes, BuglySdk.IsInitialized, nativeCallback));
+                            snapshot.MaxResponseBytes, config.EnableBugly && BuglySdk.IsInitialized, nativeCallback));
                 }
-                catch (Exception exception) { Queue(Failure(i, "bridge_error:" + exception.GetType().Name)); }
+                catch (Exception exception) { LogRequestException("Android.BridgeSubmit", i, exception); Queue(Failure(i, "bridge_error:" + exception.GetType().Name)); }
             }
             BuglySdk.LogInfo("[BuglyWebRequest] Android " + snapshot.Transport + "; urls=" + urls.Length);
 #else
@@ -169,10 +211,28 @@ namespace ZeroGame.Networking
             return operation;
         }
 
-        private void RequireSingleUrl() { if (urls.Length != 1) throw new InvalidOperationException("Use Responses for multiple URLs"); }
+        private static void ValidateEventName(string eventName)
+        {
+            if (string.IsNullOrWhiteSpace(eventName)) throw new ArgumentException("[BuglyWebRequest] eventName 不能为空，请传入稳定的埋点名称，例如 query_level。", "eventName");
+            if (eventName.Length > 120) throw new ArgumentException("[BuglyWebRequest] eventName 长度为 " + eventName.Length + "，超过最大限制 120 个字符。", "eventName");
+            foreach (char character in eventName)
+                if (char.IsWhiteSpace(character)) throw new ArgumentException("[BuglyWebRequest] eventName 不能包含空格、Tab 或换行，请使用 query_level 等不含空白的埋点名称。", "eventName");
+        }
+
+        private void RequireSingleUrl()
+        {
+            if (urls.Length != 1) throw new InvalidOperationException("[BuglyWebRequest] eventName='" + eventName + "' 配置了 " + urls.Length + " 个 URL，不能使用单地址属性 DownloadHandler/ResponseCode；请读取 Responses，或在 UrlCompleted 中处理每个地址的结果。");
+        }
+
+        private void LogRequestException(string stage, int index, Exception error)
+        {
+            Debug.LogException(new InvalidOperationException("[BuglyWebRequest][" + stage + "] eventName='" + eventName +
+                "', urls[" + index + "]=" + NetCostReporter.AnalyticsUrl(urls[index]) +
+                ", transport=" + (snapshot == null ? Options.Transport : snapshot.Transport) + "：" + error.Message, error));
+        }
         private BuglyResponse Failure(int index, string reason)
         {
-            return new BuglyResponse { Index = index, Api = api, Url = urls[index], Data = new byte[0],
+            return new BuglyResponse { Index = index, EventName = eventName, Url = urls[index], Data = new byte[0],
                 FailureReason = reason, Success = false, Transport = snapshot.Transport,
                 DurationMs = clocks[index] == null ? 0 : clocks[index].ElapsedMilliseconds,
                 Result = reason == "canceled" ? RequestResult.Canceled : RequestResult.ConnectionError };
@@ -186,7 +246,7 @@ namespace ZeroGame.Networking
             {
                 if (response.Index < 0 || response.Index >= responses.Length || responses[response.Index] != null) continue;
                 responses[response.Index] = response; count++;
-                if (snapshot.ReportNetCost) BuglySdk.Reporter.Report(response, Debug.isDebugBuild);
+                if (reportNetCost) BuglySdk.Reporter.Report(response, Debug.isDebugBuild);
                 var handlers = UrlCompleted;
                 if (handlers != null)
                     foreach (Action<BuglyResponse> handler in handlers.GetInvocationList())
@@ -233,7 +293,7 @@ namespace ZeroGame.Networking
                         bool success = native.Call<bool>("isSuccess");
                         string reason = native.Call<string>("getFailure");
                         int status = native.Call<int>("getStatus");
-                        owner.Queue(new BuglyResponse { Index = index, Api = owner.api, Url = owner.urls[index],
+                        owner.Queue(new BuglyResponse { Index = index, EventName = owner.eventName, Url = owner.urls[index],
                             Data = native.Call<byte[]>("getData"), ResponseCode = status, Success = success,
                             FailureReason = reason, Attempts = native.Call<int>("getAttempts"),
                             DurationMs = native.Call<long>("getDurationMs"), LastAttemptDurationMs = native.Call<long>("getLastAttemptMs"),
@@ -242,7 +302,7 @@ namespace ZeroGame.Networking
                                 status >= 400 ? RequestResult.ProtocolError : RequestResult.ConnectionError });
                     }
                 }
-                catch (Exception error) { owner.Queue(owner.Failure(index, "callback_error:" + error.GetType().Name)); }
+                catch (Exception error) { owner.LogRequestException("Android.ReadCallback", index, error); owner.Queue(owner.Failure(index, "callback_error:" + error.GetType().Name)); }
             }
         }
 #else
@@ -263,7 +323,7 @@ namespace ZeroGame.Networking
                     UnityWebRequestAsyncOperation started = null;
                     string sendFailure = null;
                     try { started = request.SendWebRequest(); }
-                    catch (Exception error) { sendFailure = "send_error:" + error.GetType().Name; }
+                    catch (Exception error) { LogRequestException("UnityWebRequest.Send", index, error); sendFailure = "send_error:" + error.GetType().Name; }
                     try { if (started != null) yield return started; }
                     finally { managedRequests.Remove(request); }
                     terminal = Failure(index, "connection_error"); terminal.Attempts = attempt;

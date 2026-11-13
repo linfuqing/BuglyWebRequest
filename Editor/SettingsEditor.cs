@@ -1,49 +1,66 @@
+using System.IO;
 using UnityEditor;
+using UnityEditor.PackageManager;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using ThinkingData.Analytics;
 
 namespace ZeroGame.Networking.Editor
 {
-    [CustomEditor(typeof(BuglySdkSettings))]
+    [CustomEditor(typeof(BuglySdkManager))]
     public sealed class SettingsEditor : UnityEditor.Editor
     {
-        [MenuItem("Tools/Bugly WebRequest/Create or Select SDK Configuration")]
-        public static void CreateConfiguration()
+        [MenuItem("Tools/Bugly WebRequest/Add SDK Prefab To Scene")]
+        public static void AddPrefabToScene()
         {
-            const string path = "Assets/Resources/BuglyWebRequestSettings.asset";
-            if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
-            var config = AssetDatabase.LoadAssetAtPath<BuglySdkSettings>(path);
-            if (config == null)
+            var existing = Object.FindObjectOfType<BuglySdkManager>();
+            if (existing != null)
             {
-                config = CreateInstance<BuglySdkSettings>();
-                AssetDatabase.CreateAsset(config, path); AssetDatabase.SaveAssets();
+                Selection.activeGameObject = existing.gameObject;
+                EditorGUIUtility.PingObject(existing.gameObject);
+                return;
             }
-            Selection.activeObject = config; EditorGUIUtility.PingObject(config);
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(SettingsEditor).Assembly);
+            if (package == null) { Debug.LogError("[BuglyWebRequest] SDK package not found."); return; }
+            var path = Path.Combine(package.assetPath, "Runtime/Prefabs/BuglySDK.prefab").Replace('\\', '/');
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) { Debug.LogError("[BuglyWebRequest] SDK prefab not found: " + path); return; }
+            var created = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            Undo.RegisterCreatedObjectUndo(created, "Add Bugly SDK prefab");
+            Selection.activeGameObject = created;
+            EditorSceneManager.MarkSceneDirty(created.scene);
         }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            var property = serializedObject.GetIterator();
-            bool children = true;
-            bool reuse = serializedObject.FindProperty("ReuseThinkingDataInstance").boolValue;
-            while (property.NextVisible(children))
+            using (new EditorGUI.DisabledScope(true))
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("m_Script"));
+            var config = serializedObject.FindProperty("Settings");
+            var property = config.Copy();
+            var end = property.GetEndProperty();
+            bool next = property.NextVisible(true);
+            bool reuse = config.FindPropertyRelative("ReuseThinkingDataInstance").boolValue;
+            while (next && !SerializedProperty.EqualContents(property, end))
             {
-                children = false;
-                if (property.name == "m_Script") { using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(property); continue; }
-                if (reuse && (property.name == "ThinkingMode" || property.name == "ThinkingTimeZone" ||
-                    property.name == "ThinkingTimeZoneId" || property.name == "ThinkingNetworkType" || property.name == "ThinkingEnableLog")) continue;
-                if (property.name == "ThinkingTimeZoneId" && serializedObject.FindProperty("ThinkingTimeZone").intValue != (int)TDTimeZone.Other) continue;
-                if (property.name == "BuglyAppKey") property.stringValue = EditorGUILayout.PasswordField("Bugly App Key", property.stringValue);
-                else EditorGUILayout.PropertyField(property, true);
+                bool hidden = reuse && (property.name == "ThinkingMode" || property.name == "ThinkingTimeZone" ||
+                    property.name == "ThinkingTimeZoneId" || property.name == "ThinkingNetworkType" || property.name == "ThinkingEnableLog");
+                hidden |= property.name == "ThinkingTimeZoneId" && config.FindPropertyRelative("ThinkingTimeZone").intValue != (int)TDTimeZone.Other;
+                if (!hidden)
+                {
+                    if (property.name == "BuglyAppKey") property.stringValue = EditorGUILayout.PasswordField("Bugly App Key", property.stringValue);
+                    else EditorGUILayout.PropertyField(property, true);
+                }
+                next = property.NextVisible(false);
             }
             serializedObject.ApplyModifiedProperties();
-            EditorGUILayout.HelpBox("配置属于使用方工程。Initialize On Startup 开启时启动自动初始化，适用于下载前已获得同意的流程；关闭时由游戏调用 InitializeAfterConsent()。修改初始化配置需重新启动应用。", MessageType.Info);
+            EditorGUILayout.HelpBox("直接在场景 Prefab 实例上填写配置。Initialize On Startup 开启时自动初始化；关闭后由游戏在同意隐私政策后调用 InitializeAfterConsent()。", MessageType.Info);
             if (GUILayout.Button("校验配置"))
             {
-                string error;
-                if (((BuglySdkSettings)target).Validate(out error)) Debug.Log("[BuglyWebRequest] 配置校验通过。");
-                else Debug.LogWarning("[BuglyWebRequest] " + error);
+                string error = "";
+                var settings = ((BuglySdkManager)target).Settings;
+                if (settings != null && settings.Validate(out error)) Debug.Log("[BuglyWebRequest] 配置校验通过。");
+                else Debug.LogWarning("[BuglyWebRequest] " + (settings == null ? "配置为空。" : error));
             }
         }
     }

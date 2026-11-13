@@ -17,16 +17,22 @@ Bugly WebRequest + ThinkingData
    https://github.com/linfuqing/BuglyWebRequest.git
    ```
 
-——2. 创建配置
+——2. 配置 Prefab
 
-打开 **Tools > Bugly WebRequest > Create or Select SDK Configuration**，创建：
+将主 SDK 中的 `Runtime/Prefabs/BuglySDK.prefab` 拖入启动场景，或通过 **Tools > Bugly WebRequest > Add SDK Prefab To Scene** 添加。
+Prefab 已挂载 BuglySdkManager，在场景实例的 Inspector 中填写 Bugly、数数及 DefaultRequest 参数，不需要创建或引用配置 Asset。
 
-```text
-Assets/Resources/BuglyWebRequestSettings.asset//该资源路径不可更改！！！
+开启 **InitializeOnStartup** 后自动初始化并跨场景保留，只需在启动场景放一份。需要等待隐私同意时关闭该选项，在同意后调用：
+
+```csharp
+BuglySdkManager.Instance.InitializeAfterConsent();
 ```
-填写 Bugly AppID、AppKey、地区，以及数数 AppID、ServerUrl、Mode、TimeZone。超时、重试和传输方式可在 DefaultRequest 中设置。
 
-开启 **InitializeOnStartup** 后自动初始化，无需挂载脚本或手动调用。
+旧的 BuglyWebRequestSettings.asset 不再读取，请将原参数填写到 Prefab 实例后删除旧 Asset。不要把项目账号填写到 SDK 仓库自带的 Prefab 中。
+
+Trace 发送前会检查初始化状态；启用的模块尚未就绪时抛出明确异常，请求不会发送。缺少场景 Prefab 也会提示。
+Android 检查启用的 Bugly 和数数；Editor 仅在 EnableEditorAnalytics 开启时检查数数；WebGL/桌面不要求 Android Bugly 初始化。
+主动关闭的模块不检查；单次请求 ReportNetCost=false 时不要求数数就绪。自动初始化发生在 SDK 组件的 Start，业务代码请在其后发送请求。
 ##Bugly配置信息
 	Enable Bugly:勾选后使用Bugly
 
@@ -76,11 +82,11 @@ using ZeroGame.Networking;
 ```csharp
 void SendFromConfig()
 {
-    var form = new WWWForm();
-    form.AddField("function", 111); // 按服务器接口填写表单
-    BuglyWebRequest.Post("report_event", form);
+    BuglyWebRequest.Trace("report_event");
 }
 ```
+
+入口一无需创建 WWWForm，默认发送空 POST；需要参数时仍可用 Trace("report_event", form)，显式传 null 也表示空请求体。入口二、三继续传入 form 和 urls。
 
 编辑包内 `Runtime/Resources/BuglyWebRequestDefaultUrls.txt`，或在项目创建 `Assets/Resources/BuglyWebRequestUrls.txt` 覆盖默认地址。每行一个完整 HTTP(S) URL，可填写多个；支持空行和整行 `#` / `//` 注释。
 ### 入口二：显式 URL，自动发送，接收回调
@@ -92,7 +98,7 @@ void SendWithCallback()
     form.AddField("function", 111);
     string[] urls = { "https://your-server.example/connect.php" };
 
-    BuglyWebRequest.Post("query_level", form, urls, response =>
+    BuglyWebRequest.Trace("query_level", form, urls, response =>
     {
         Debug.Log($"URL={response.Url} 成功={response.Success}");
         byte[] data = response.Data; // 解析服务器返回的数据
@@ -113,7 +119,7 @@ IEnumerator SendManually()
     form.AddField("function", 111);
     string[] urls = { "https://your-server.example/connect.php" };
 
-    using (var request = BuglyWebRequest.Post("query_level", form, urls))
+    using (var request = BuglyWebRequest.Trace("query_level", form, urls))
     {
         request.Options.Transport = HttpTransport.OkHttp; // 或 UrlConnection
         request.Options.MaxAttempts = 3; // 含首次请求，1 表示不重试
@@ -137,3 +143,7 @@ IEnumerator SendManually()
 将 BuglyWebRequestDemo 挂到场景对象后运行；DrawUI 控制面板显示，仅导入文件不会显示 UI。
 
 Android 真机使用 OkHttp / URLConnection；Editor、WebGL、桌面使用 UnityWebRequest。HTTP 地址需在 Player Settings 中配置 **Allow downloads over HTTP**。
+
+##错误信息
+
+参数错误会指出具体字段、限制范围或 URL 行号；自动启动失败包含 eventName、传输方式和 URL 数量。原始异常保留在 InnerException，记录日志请使用 Debug.LogException(exception)，不要只记录异常类型。初始化失败可读取 BuglySdkManager.Instance.LastError。

@@ -21,7 +21,7 @@ namespace ZeroGame.Networking
         {
             if (response.ReportAttempted) return;
             response.ReportAttempted = true;
-            bool first = !finishedApis.Contains(response.Api);
+            bool first = !finishedApis.Contains(response.EventName);
             bool reported = false;
             string trackError = string.Empty;
             try
@@ -29,7 +29,7 @@ namespace ZeroGame.Networking
                 if (Sink != null && Sink.IsReady)
                 {
                     Sink.Track("net_cost", new Dictionary<string, object> {
-                        { "api", response.Api }, { "duration_ms", Math.Max(0L, response.DurationMs) },
+                        { "api", response.EventName }, { "duration_ms", Math.Max(0L, response.DurationMs) },
                         { "success", response.Success }, { "first", first },
                         { "failure_reason", response.FailureReason ?? string.Empty },
                         { "url", AnalyticsUrl(response.Url) }, { "attempts", response.Attempts },
@@ -37,12 +37,12 @@ namespace ZeroGame.Networking
                         { "attempt_duration_ms", Math.Max(0L, response.LastAttemptDurationMs) }
                     });
                     reported = true; // Accepted by local SDK call, not backend delivery confirmation.
-                    finishedApis.Add(response.Api);
+                    finishedApis.Add(response.EventName);
                 }
             }
             catch (Exception error) { trackError = error.GetType().Name; }
             // Do not log response bodies, query strings, tokens or SDK exception messages.
-            log("[net_cost] debug=" + Lower(debug) + " api=" + response.Api +
+            log("[net_cost] debug=" + Lower(debug) + " api=" + response.EventName +
                 " duration_ms=" + Math.Max(0L, response.DurationMs) + " success=" + Lower(response.Success) +
                 " first=" + Lower(first) + " reported=" + Lower(reported) + " trackError=" + trackError);
         }

@@ -1,5 +1,4 @@
 using System;
-using UnityEngine.Serialization;
 
 namespace ZeroGame.Networking
 {
@@ -9,37 +8,26 @@ namespace ZeroGame.Networking
     [Serializable]
     public sealed class RequestOptions
     {
-        [FormerlySerializedAs("transport")]
         public HttpTransport Transport = HttpTransport.OkHttp;
-        [FormerlySerializedAs("timeoutSeconds")]
         public int TimeoutSeconds = 15;
         // Includes first send; use 1 for non-idempotent operations without a requestId.
-        [FormerlySerializedAs("maxAttempts")]
         public int MaxAttempts = 3;
-        [FormerlySerializedAs("retryDelayMs")]
         public int RetryDelayMs = 250;
-        [FormerlySerializedAs("maxResponseBytes")]
         public int MaxResponseBytes = 16 * 1024 * 1024;
-        [FormerlySerializedAs("reportNetCost")]
         public bool ReportNetCost = true;
-        // Source compatibility; Unity serializes the PascalCase fields above.
-        [Obsolete("Use Transport instead.")]
-        public HttpTransport transport { get { return Transport; } set { Transport = value; } }
-        [Obsolete("Use TimeoutSeconds instead.")]
-        public int timeoutSeconds { get { return TimeoutSeconds; } set { TimeoutSeconds = value; } }
-        [Obsolete("Use MaxAttempts instead.")]
-        public int maxAttempts { get { return MaxAttempts; } set { MaxAttempts = value; } }
-        [Obsolete("Use RetryDelayMs instead.")]
-        public int retryDelayMs { get { return RetryDelayMs; } set { RetryDelayMs = value; } }
-        [Obsolete("Use MaxResponseBytes instead.")]
-        public int maxResponseBytes { get { return MaxResponseBytes; } set { MaxResponseBytes = value; } }
-        [Obsolete("Use ReportNetCost instead.")]
-        public bool reportNetCost { get { return ReportNetCost; } set { ReportNetCost = value; } }
 
         internal RequestOptions Snapshot()
         {
-            if (TimeoutSeconds < 1 || MaxAttempts < 1 || MaxAttempts > 10 || RetryDelayMs < 0 || MaxResponseBytes < 1)
-                throw new ArgumentOutOfRangeException("Invalid HTTP options");
+            if (!Enum.IsDefined(typeof(HttpTransport), Transport))
+                throw new ArgumentOutOfRangeException("Transport", Transport, "[BuglyWebRequest] Transport 仅支持 OkHttp 或 UrlConnection。");
+            if (TimeoutSeconds < 1)
+                throw new ArgumentOutOfRangeException("TimeoutSeconds", TimeoutSeconds, "[BuglyWebRequest] 每次请求的超时秒数必须大于或等于 1。");
+            if (MaxAttempts < 1 || MaxAttempts > 10)
+                throw new ArgumentOutOfRangeException("MaxAttempts", MaxAttempts, "[BuglyWebRequest] 尝试次数必须在 1 到 10 之间，包含首次请求；1 表示不重试。");
+            if (RetryDelayMs < 0)
+                throw new ArgumentOutOfRangeException("RetryDelayMs", RetryDelayMs, "[BuglyWebRequest] 重试等待毫秒数不能小于 0。");
+            if (MaxResponseBytes < 1)
+                throw new ArgumentOutOfRangeException("MaxResponseBytes", MaxResponseBytes, "[BuglyWebRequest] 响应大小限制必须大于或等于 1 字节。");
             return (RequestOptions)MemberwiseClone();
         }
     }
@@ -47,7 +35,7 @@ namespace ZeroGame.Networking
     public sealed class BuglyResponse
     {
         public int Index { get; internal set; }
-        public string Api { get; internal set; }
+        public string EventName { get; internal set; }
         public string Url { get; internal set; }
         public byte[] Data { get; internal set; }
         public long ResponseCode { get; internal set; }
@@ -65,9 +53,5 @@ namespace ZeroGame.Networking
     {
         public byte[] Data { get; internal set; }
         public string Text { get { return Data == null ? string.Empty : System.Text.Encoding.UTF8.GetString(Data); } }
-        [Obsolete("Use Data instead.")]
-        public byte[] data { get { return Data; } internal set { Data = value; } }
-        [Obsolete("Use Text instead.")]
-        public string text { get { return Text; } }
     }
 }

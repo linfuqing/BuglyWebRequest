@@ -10,8 +10,7 @@ namespace ZeroGame.Networking.Editor
         [MenuItem("Tools/Bugly WebRequest/Verify Configuration Mapping")]
         public static void Run()
         {
-            var config = ScriptableObject.CreateInstance<BuglySdkSettings>();
-            try
+            var config = new BuglySdkSettings();
             {
                 string error;
                 Check(!config.Validate(out error), "Empty credentials accepted");
@@ -39,7 +38,7 @@ namespace ZeroGame.Networking.Editor
                 Check(config.Validate(out error), "Reuse incorrectly requires fresh initialization fields");
                 Debug.Log("[BuglyWebRequest] Configuration checks PASS: Mode/TimeZone/custom timezone/default request isolation/reuse/validation. No SDK initialized or network sent.");
             }
-            finally { UnityEngine.Object.DestroyImmediate(config); }
+
         }
         private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     }
