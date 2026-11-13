@@ -4,13 +4,13 @@ Bugly WebRequest + ThinkingData
 
 打开 **Window > Package Manager > + > Add package from git URL**，请按顺序添加！！！：
 
-1. Bugly Android 适配包：
+1. Bugly Android 适配包（我们自己的桥接代码；Bugly 原生 SDK 由 Android 构建时从 Maven Central 下载，不随本仓库分发）：
    ```text
    https://github.com/linfuqing/BuglyWebRequest.git?path=/Dependencies~/cn.com.zerogame.bugly-android
    ```
-2. 数数 3.5.0（已有相同版本可跳过）：
+2. 数数官方 3.5.0（已有相同版本可跳过）：
    ```text
-   https://github.com/linfuqing/BuglyWebRequest.git?path=/Dependencies~/com.thinkingdata.analytics
+   https://github.com/ThinkingDataAnalytics/unity-sdk.git#v3.5.0
    ```
 3. 主 SDK：
    ```text
