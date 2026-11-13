@@ -15,11 +15,10 @@ https://github.com/linfuqing/BuglyWebRequest.git
 ```
 自己已经配置的Bugly Android依赖不会被覆盖
 
-—— 2. 配置 SDK
+—— 2. 配置 SDK（如果已经自行完成或拥有完成官方 Bugly（启用 NET_QUALITY）和数数默认实例初始化，可忽略该步骤）
 
 由本 SDK 初始化：将包内 `Runtime/Prefabs/BuglyWebRequest.prefab` 拖入启动场景，在 Inspector 中填写配置，只需放一份。
 
-如果已经自行完成或拥有完成官方 Bugly（启用 NET_QUALITY）和数数默认实例初始化，可以使用BuglyWebRequest.prefab，可直接去到步骤3（——3. 两种调用入口），相关配置会自动检测。
 
 需要自定义超时等参数或选择数数实例时，仍可挂 Prefab，开启 Reuse Bugly Instance / Reuse Thinking Data Instance。复用时 Bugly 账号无需填写；数数 AppID 留空使用默认实例，填写可选择对应实例。原生实例未就绪时会明确报错，请求不会发送。
 
