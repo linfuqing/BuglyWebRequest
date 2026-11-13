@@ -1,27 +1,18 @@
 Bugly WebRequest + ThinkingData
 
 ——1. 导入 SDK
+使用 **Window > Package Manager > + > Add package from git URL*：
+按顺序导入
 
-Android 网络适配已合并到主 SDK，不再单独安装适配包。我们的 SDK 只有一个 Git 地址：
-
-```text
-https://github.com/linfuqing/BuglyWebRequest.git
+安装数数官方 3.5.0（已安装则跳过）
 ```
-
-使用 **Window > Package Manager > + > Add package from git URL** 添加。工程需先安装数数官方 3.5.0（已安装则跳过）：
-
-```text
 https://github.com/ThinkingDataAnalytics/unity-sdk.git#v3.5.0
 ```
 
-旧工程升级时，先在 Package Manager 移除旧的 `cn.com.zerogame.bugly-android`，再更新主 SDK，避免重复程序集。
-Bugly、OkHttp、SSE 原生依赖仍在 Android 构建时从 Maven Central 获取，已有任意版本的声明不重复添加。
-
-如需一次安装主 SDK 与数数，仍可导入安装器并点击“一键安装 / 修复 SDK 与依赖”：
-
-```text
-https://github.com/linfuqing/BuglyWebRequest.git?path=/Installer~
 ```
+https://github.com/linfuqing/BuglyWebRequest.git
+```
+打包 Android 时，SDK 会检查并补齐这三个原生库，已有任意版本的声明不重复添加。
 
 ——2. 配置 Prefab
 

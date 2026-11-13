@@ -1,8 +1,0 @@
-{
-  "name": "ZeroGame.BuglyWebRequest.Installer.Editor",
-  "rootNamespace": "ZeroGame.Networking.Installer",
-  "includePlatforms": [
-    "Editor"
-  ],
-  "autoReferenced": true
-}

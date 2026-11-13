@@ -1,7 +1,0 @@
-{
-  "unity": "2022.3",
-  "name": "cn.com.zerogame.bugly-webrequest.installer",
-  "displayName": "Bugly WebRequest Installer",
-  "description": "One-click installer for Bugly WebRequest and its official external dependencies.",
-  "version": "0.4.1"
-}
