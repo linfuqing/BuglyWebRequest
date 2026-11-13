@@ -20,12 +20,14 @@ namespace ZeroGame.Networking.Installer
     internal sealed class InstallPlan
     {
         public PackageTarget[] Packages;
+        public string[] RemovePackages = new string[0];
         public long DeadlineUtcTicks;
         public string BackupPath;
     }
 
     internal static class InstallerPlan
     {
+        internal const string LegacyAdapterName = "cn.com.zerogame.bugly-android";
         internal const string InstallerName = "cn.com.zerogame.bugly-webrequest.installer";
         internal const string Repository = "https://github.com/linfuqing/BuglyWebRequest.git";
         internal const string ThinkingRepository = "https://github.com/ThinkingDataAnalytics/unity-sdk.git";
@@ -47,8 +49,6 @@ namespace ZeroGame.Networking.Installer
             return new InstallPlan {
                 DeadlineUtcTicks = DateTime.UtcNow.AddMinutes(10).Ticks,
                 Packages = new[] {
-                    new PackageTarget { Name = "cn.com.zerogame.bugly-android", DisplayName = "Bugly Android 网络适配", Version = "4.4.8",
-                        Repository = repository, Commit = commit, Url = repository + "?path=/Dependencies~/cn.com.zerogame.bugly-android" + revision },
                     new PackageTarget { Name = "com.thinkingdata.analytics", DisplayName = "数数官方 SDK", Version = "3.5.0",
                         Repository = ThinkingRepository, Commit = "", Url = ThinkingRepository + "#v3.5.0" },
                     new PackageTarget { Name = "cn.com.zerogame.bugly-webrequest", DisplayName = "Bugly WebRequest 主 SDK", Version = installer.version,
@@ -65,6 +65,10 @@ namespace ZeroGame.Networking.Installer
 
         internal static void CheckConflicts(InstallPlan plan, PackageInfo[] installed, bool allowVersionReplacement)
         {
+            var oldAdapter = Find(installed, LegacyAdapterName);
+            if (oldAdapter != null && (oldAdapter.source == PackageSource.Embedded || oldAdapter.source == PackageSource.Local || oldAdapter.source == PackageSource.LocalTarball))
+                throw new InvalidOperationException("[BuglyInstaller][Conflict] 旧 Android 独立适配包来自本地或内嵌源码：" + oldAdapter.resolvedPath +
+                    "。Android 功能已合并到主 SDK，请先自行备份并移走旧包/移除本地引用，避免重复程序集；安装器不会删除本地源码。");
             foreach (var target in plan.Packages)
             {
                 var current = Find(installed, target.Name);
@@ -81,6 +85,7 @@ namespace ZeroGame.Networking.Installer
         internal static string Verify(InstallPlan plan, PackageInfo[] installed)
         {
             var issues = new List<string>();
+            if (Find(installed, LegacyAdapterName) != null) issues.Add("旧 Android 独立适配包仍存在，可能造成重复程序集；请移除 cn.com.zerogame.bugly-android。");
             foreach (var target in plan.Packages)
             {
                 var package = Find(installed, target.Name);

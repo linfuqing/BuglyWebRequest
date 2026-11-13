@@ -1,7 +1,0 @@
-{
-  "name": "cn.com.zerogame.bugly-android",
-  "version": "4.4.8",
-  "unity": "2022.3",
-  "displayName": "Bugly Android Network Adapter",
-  "description": "ZeroGame Unity adapter for Tencent Bugly Pro 4.4.8.2 network monitoring. Downloads native Maven dependencies during Android builds."
-}

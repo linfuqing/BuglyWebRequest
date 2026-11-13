@@ -28,7 +28,7 @@ namespace ZeroGame.Networking.Installer
         {
             scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUILayout.LabelField("Bugly WebRequest 一键安装", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("一次安装主 SDK 和两个依赖。数数使用官方 Git，Bugly 原生 SDK 在 Android 构建时从 Maven Central 下载。", MessageType.Info);
+            EditorGUILayout.HelpBox("一次安装含 Android 功能的主 SDK 和数数依赖。数数使用官方 Git，Bugly 原生 SDK 在 Android 构建时从 Maven Central 下载。", MessageType.Info);
             try
             {
                 var plan = InstallerService.Preview();

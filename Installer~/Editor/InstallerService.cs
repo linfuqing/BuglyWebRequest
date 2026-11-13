@@ -19,7 +19,7 @@ namespace ZeroGame.Networking.Installer
         private static double nextCheck;
         internal static event Action Changed;
         internal static bool IsBusy { get { return pending != null; } }
-        internal static string Status { get { return SessionState.GetString(StatusKey, "点击安装，将一次加入主 SDK、数数官方 SDK 和自有 Android 适配包。"); } }
+        internal static string Status { get { return SessionState.GetString(StatusKey, "点击安装，将一次加入含 Android 功能的主 SDK 和数数官方 SDK。"); } }
         internal static bool Failed { get { return SessionState.GetBool(FailedKey, false); } }
         internal static PackageInfo Self { get { return PackageInfo.FindForAssembly(typeof(InstallerService).Assembly); } }
 
@@ -61,7 +61,10 @@ namespace ZeroGame.Networking.Installer
             if (EditorApplication.isCompiling || EditorApplication.isUpdating)
                 throw new InvalidOperationException("[BuglyInstaller][Install] Unity 正在编译或导入资源，请等待完成后再试。");
             var plan = Preview();
-            InstallerPlan.CheckConflicts(plan, PackageInfo.GetAllRegisteredPackages(), allowVersionReplacement);
+            var installed = PackageInfo.GetAllRegisteredPackages();
+            InstallerPlan.CheckConflicts(plan, installed, allowVersionReplacement);
+            var legacyAdapter = InstallerPlan.Find(installed, InstallerPlan.LegacyAdapterName);
+            plan.RemovePackages = legacyAdapter != null && legacyAdapter.isDirectDependency ? new[] { InstallerPlan.LegacyAdapterName } : new string[0];
             string project = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             string backupFolder = Path.Combine(project, "Library/BuglyWebRequestInstaller");
             Directory.CreateDirectory(backupFolder);
@@ -71,8 +74,8 @@ namespace ZeroGame.Networking.Installer
             for (int i = 0; i < urls.Length; i++) urls[i] = plan.Packages[i].Url;
             pending = plan;
             SessionState.SetString(PendingKey, JsonUtility.ToJson(plan));
-            SetStatus("正在通过 Package Manager 批量安装三个包，等待下载、解析和编译完成……", false);
-            try { request = Client.AddAndRemove(urls, new string[0]); }
+            SetStatus("正在通过 Package Manager 批量安装主 SDK 和数数官方包，等待下载、解析和编译完成……", false);
+            try { request = Client.AddAndRemove(urls, plan.RemovePackages); }
             catch (Exception error)
             {
                 Fail("[BuglyInstaller][AddAndRemove] 无法启动批量安装：" + error.Message + "\n如 Package Manager 正在执行其他任务，请等待完成后重试。安装前依赖备份：" + plan.BackupPath);
@@ -109,8 +112,8 @@ namespace ZeroGame.Networking.Installer
             {
                 pending = null; request = null;
                 SessionState.EraseString(PendingKey);
-                SetStatus("安装完成，三个包的版本与 Git 来源已验证。请将主 SDK 的 Runtime/Prefabs/BuglySDK.prefab 拖入启动场景并填写配置。", false);
-                Debug.Log("[BuglyInstaller] Install verified: main SDK, official ThinkingData and self-owned Android adapter.");
+                SetStatus("安装完成，两个包的版本与 Git 来源已验证。请将主 SDK 的 Runtime/Prefabs/BuglySDK.prefab 拖入启动场景并填写配置。", false);
+                Debug.Log("[BuglyInstaller] Install verified: Android-integrated main SDK and official ThinkingData; legacy adapter absent.");
                 return;
             }
             if (DateTime.UtcNow.Ticks > pending.DeadlineUtcTicks)

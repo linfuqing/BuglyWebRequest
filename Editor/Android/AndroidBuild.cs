@@ -15,7 +15,7 @@ namespace ZeroGame.Networking.Editor
         public void OnPostGenerateGradleAndroidProject(string path)
         {
             var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(AndroidBuild).Assembly);
-            if (package == null) throw new InvalidOperationException("[BuglyAndroid][GradleExport] 无法定位 AndroidBuild 所在的适配包。请确认 cn.com.zerogame.bugly-android 已通过 Package Manager 安装，不要单独复制构建脚本。");
+            if (package == null) throw new InvalidOperationException("[BuglyAndroid][GradleExport] 无法定位 AndroidBuild 所在的适配包。请确认 cn.com.zerogame.bugly-webrequest 主包已通过 Package Manager 安装，不要单独复制 Android 构建脚本。");
             var javaPath = Path.Combine(path, "src/main/java/cn/zero3d/buglywebrequest");
             Directory.CreateDirectory(javaPath);
             foreach (var name in new[] { "WireBridge", "SdkBridge" })
@@ -42,8 +42,7 @@ namespace ZeroGame.Networking.Editor
                 "-keep class okhttp3.sse.** { public *; }\n");
             var gradlePath = Path.Combine(path, "build.gradle");
             var gradle = File.ReadAllText(gradlePath);
-            foreach (var coordinate in new[] { "com.tencent.bugly:bugly-pro:4.4.8.2", "com.squareup.okhttp3:okhttp:3.12.13", "com.squareup.okhttp3:okhttp-sse:3.12.13" })
-                if (!gradle.Contains(coordinate)) gradle += "\ndependencies { implementation '" + coordinate + "' }\n";
+            gradle = GradleDependencyUtility.EnsureDependencies(gradle, message => Debug.Log(message));
             if (!gradle.Contains("consumerProguardFiles 'bugly-webrequest.pro'"))
                 gradle += "\nandroid { defaultConfig { consumerProguardFiles 'bugly-webrequest.pro' } }\n";
             File.WriteAllText(gradlePath, gradle);

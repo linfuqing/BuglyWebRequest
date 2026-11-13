@@ -46,7 +46,7 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
         float scale = Mathf.Max(0.1f, Mathf.Min(Screen.width / 800f, Screen.height / 850f));
         GUI.matrix = Matrix4x4.Scale(Vector3.one * scale);
         GUILayout.BeginArea(new Rect(15, 15, 750, 720), GUI.skin.box);
-        GUILayout.Label("Bugly WebRequest SDK 0.4.0 — 统一配置测试");
+        GUILayout.Label("Bugly WebRequest SDK 0.4.1 — 统一配置测试");
         GUILayout.Label(Settings == null ? "未找到配置：将 Runtime/Prefabs/BuglySDK.prefab 拖入场景" : "配置：场景中的 Bugly SDK 组件");
         if (Settings != null)
         {
