@@ -9,6 +9,9 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
     public BuglySdkSettings Settings;
     [FormerlySerializedAs("api")]
     public string Api = "test_post";
+    public string[] Urls = new string[0];
+    private bool useTextConfig = true;
+    private string explicitUrlText = "";
     private string[] urls = new string[0];
     private string urlText = "";
     private HttpTransport transport;
@@ -21,6 +24,7 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
     {
         if (Settings == null) Settings = BuglySdkManager.CurrentSettings;
         if (Settings != null) transport = Settings.DefaultRequest.Transport;
+        explicitUrlText = string.Join("\n", Urls ?? new string[0]);
         TryLoadUrls();
     }
     private bool TryLoadUrls()
@@ -45,7 +49,7 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
         float scale = Mathf.Max(0.1f, Mathf.Min(Screen.width / 800f, Screen.height / 850f));
         GUI.matrix = Matrix4x4.Scale(Vector3.one * scale);
         GUILayout.BeginArea(new Rect(15, 15, 750, 720), GUI.skin.box);
-        GUILayout.Label("Bugly WebRequest SDK 0.3.2 — 统一配置测试");
+        GUILayout.Label("Bugly WebRequest SDK 0.3.3 — 统一配置测试");
         GUILayout.Label(Settings == null ? "未找到配置：Tools > Bugly WebRequest > Create or Select SDK Configuration" : "配置：" + Settings.name);
         if (Settings != null)
         {
@@ -59,10 +63,20 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
             }
         }
         GUILayout.Label("api 埋点名"); Api = GUILayout.TextField(Api);
-        GUILayout.Label("URL 从文本配置读取（每行一个），共 " + urls.Length + " 个");
-        GUILayout.Label(urlText, GUI.skin.textArea, GUILayout.Height(100));
-        if (GUILayout.Button("重新读取 URL 文本")) TryLoadUrls();
-        transport = (HttpTransport)GUILayout.SelectionGrid((int)transport, new[] { "OkHttp", "URLConnection" }, 2);
+        useTextConfig = GUILayout.Toggle(useTextConfig, "文本 URL 自动发送（取消勾选：显式 URL 获取响应）");
+        if (useTextConfig)
+        {
+            GUILayout.Label("文本配置，共 " + urls.Length + " 个 URL；传输方式使用 SDK 默认配置");
+            GUILayout.Label(urlText, GUI.skin.textArea, GUILayout.Height(100));
+            if (GUILayout.Button("重新读取 URL 文本")) TryLoadUrls();
+        }
+        else
+        {
+            GUILayout.Label("显式 URL：每行一个，不读取文本配置");
+            explicitUrlText = GUILayout.TextArea(explicitUrlText, GUILayout.Height(100));
+            Urls = explicitUrlText.Split(new[] {'\r', '\n'}, System.StringSplitOptions.RemoveEmptyEntries);
+            transport = (HttpTransport)GUILayout.SelectionGrid((int)transport, new[] { "OkHttp", "URLConnection" }, 2);
+        }
         GUI.enabled = active == null;
         if (GUILayout.Button("发送测试表单 function=111")) StartCoroutine(Send());
         GUI.enabled = true;
@@ -71,18 +85,20 @@ public sealed class BuglyWebRequestDemo : MonoBehaviour
     }
     private IEnumerator Send()
     {
-        if (!TryLoadUrls()) yield break;
+        bool textMode = useTextConfig;
+        if (textMode && !TryLoadUrls()) yield break;
         var form = new WWWForm(); form.AddField("function", 111);
         BuglyWebRequest request;
-        try { request = BuglyWebRequest.Post(Api, form); }
+        try { request = textMode ? BuglyWebRequest.Post(Api, form) : BuglyWebRequest.Post(Api, form, Urls); }
         catch (System.Exception error) { status = error.Message; yield break; }
         active = request;
         using (request)
         {
-            request.Options.Transport = transport;
+            if (!textMode) request.Options.Transport = transport;
             request.UrlCompleted += response => status = response.Index + ": success=" + response.Success +
                 " attempts=" + response.Attempts + " ms=" + response.DurationMs + " reason=" + response.FailureReason;
-            yield return request.SendWebRequest();
+            if (textMode) yield return new WaitUntil(() => request.IsDone);
+            else yield return request.SendWebRequest();
         }
         active = null;
     }

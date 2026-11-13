@@ -1,4 +1,4 @@
-# Bugly WebRequest + ThinkingData — UPM 0.3.2
+# Bugly WebRequest + ThinkingData — UPM 0.3.3
 
 Unity 2022.3+。Android 使用 OkHttp / URLConnection，Editor、WebGL 和桌面使用 UnityWebRequest。
 保留表单 POST、字节响应、每 URL 独立重试与最终结果一次 net_cost 上报。
@@ -34,26 +34,39 @@ Bugly 的 Maven 原生 SDK 4.4.8.2、OkHttp 与 SSE 在 Android 构建时下载�
 
 将上述键合并到现有 dependencies，保留项目原有依赖。正式交付建议所有 URL 都追加相同的 `#完整提交SHA`，固定同一仓库快照。
 
-## 文本 URL 配置（0.3.1）
+## URL 来源与发送方式（0.3.3）
 
-直接编辑 Git 包内 `Runtime/Resources/BuglyWebRequestDefaultUrls.txt`，UTF-8 编码，每行一个完整 HTTP(S) URL。支持多个地址、空行和整行 `#` / `//` 注释；不要在 URL 后追加行内注释。
-Demo 默认从这个文本读取，无需 Inspector 填写 URL，每次发送前重新加载；读取或格式校验失败时不会发送。
-文件预置本地 PHP、腾讯云东京和谷歌云东京三个测试地址，各地址独立请求和重试。只读取配置不会自动发送网络请求。
+三种入口均在 Unity 主线程调用：
 
-使用方也可在自己的 `Assets/Resources/BuglyWebRequestUrls.txt` 放置同格式文本，该文件优先于包内默认配置。请保持该资源名称唯一，不要编辑 Library/PackageCache 中的只读 Git 包。
-这是构建时携带的本地文本配置；修改仓库文本后需要更新 Git 包，Android/WebGL 等已安装版本需要重新构建发布，不能远程热更新。
-URL 文本仅配置请求地址，不决定 HTTP 连接是否复用。
-
-自有业务脚本中可这样使用（Unity 主线程）：
+| 调用 | URL 来源 | 发送方式 |
+|---|---|---|
+| `Post(api, form)` | 文本配置 | 自动发送，不需要业务回调 |
+| `Post(api, form, urls, onComplete)` | 传入的 string[] | 自动发送，每个 URL 最终回调一次 |
+| `Post(api, form, urls)` | 传入的 string[] / params | 先配置，调用 SendWebRequest() 才发送 |
 
 ```csharp
-using (var request = BuglyWebRequest.Post("your_api", form))
+// 不需要业务回调：读取文本并自动发送，SDK 负责完成后的释放。
+BuglyWebRequest.Post("telemetry", form);
+
+// 短连接：只使用显式地址，不读取文本；自动发送并返回结果。
+string[] urls = { "https://your-server.example/connect.php" };
+BuglyWebRequest.Post("query_level", form, urls, response =>
 {
-    yield return request.SendWebRequest();
-}
+    Debug.Log(response.Success);
+    // response.Data 是该 URL 返回的 byte[]。
+});
 ```
 
-所有 Post 请求都在创建时读取文本配置，不只 Demo。旧的三参数调用保留兼容，但传入的 urls 不再生效，并产生 Obsolete 编译提醒；请改成 Post(api, form)。读取失败或文本格式有误会抛出异常，不创建网络请求。
+自动发送的入口不要再调用 SendWebRequest()，也不要在刚调用后立即 using/Dispose，否则会取消正在进行的请求。自动入口使用 SDK 默认请求选项，返回对象仍可用于 Abort()。
+需要逐次设置超时、传输方式等参数时，使用显式 urls 的手动发送入口，示例见下方。
+所有 URL 都独立重试和上报；多 URL 回调也是每个地址一次，不会因其中一个成功而忽略其他地址。
+显式 urls 为 null、空数组或包含非法地址时直接报错，不回退到文本。
+
+文本入口读取 Git 包内 `Runtime/Resources/BuglyWebRequestDefaultUrls.txt`，UTF-8 编码，每行一个完整 HTTP(S) URL，支持空行和整行 # / // 注释。
+使用方的 `Assets/Resources/BuglyWebRequestUrls.txt` 优先于包内默认配置，请保持资源名唯一。
+修改 Git 文本需更新包并重新构建 Player，不是远程热更新。短连接的显式 URL 不受文本内容影响。
+这些入口都是 HTTP 请求；不提供回调不等于建立 WebSocket 或 Unity Transport 长连接，也不会改变 HTTP Keep-Alive 协商。
+
 ## 导入 Demo 与配置
 
 选中 Bugly WebRequest + ThinkingData，展开 Samples，点击 Bugly WebRequest Demo 的 Import。
@@ -70,7 +83,7 @@ using ZeroGame.Networking;
 // 放入你自己的 IEnumerator 方法内：
 var form = new UnityEngine.WWWForm();
 form.AddField("function", 111);
-using (var request = BuglyWebRequest.Post("test_post", form))
+using (var request = BuglyWebRequest.Post("test_post", form, urls))
 {
     request.Options.Transport = HttpTransport.OkHttp;
     request.UrlCompleted += response => UnityEngine.Debug.Log(
@@ -79,7 +92,7 @@ using (var request = BuglyWebRequest.Post("test_post", form))
 }
 ```
 
-URL 统一读取文本配置；每个 URL 独立执行和重试，业务返回字节内容由游戏解析。
+手动发送示例中的 urls 是调用方提供的 string[]；每个 URL 独立执行和重试，业务返回字节内容由游戏解析。
 SDK 的网络成功状态不根据业务响应中的 true/false 判断。
 数数本地 Track 成功和 Bugly 初始化成功均不能单独证明后台已接收。
 
@@ -96,7 +109,7 @@ IEnumerator Query()
 {
     var form = new WWWForm();
     form.AddField("function", 111);
-    using (var request = BuglyWebRequest.Post("query_level", form))
+    using (var request = BuglyWebRequest.Post("query_level", form, urls))
     {
         request.Options.Transport = HttpTransport.OkHttp;
         request.Options.MaxAttempts = 3; // 含首次请求，1 表示不重试

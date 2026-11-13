@@ -41,7 +41,7 @@ namespace ZeroGame.Networking
         private readonly ConcurrentQueue<BuglyResponse> incoming = new ConcurrentQueue<BuglyResponse>();
         private readonly List<UnityWebRequest> managedRequests = new List<UnityWebRequest>();
         private readonly Stopwatch[] clocks;
-        private bool sent, disposed, aborted;
+        private bool sent, disposed, aborted, autoDispose;
         private int count;
         private RequestOptions snapshot;
         private BuglyWebRequestOperation operation;
@@ -113,16 +113,32 @@ namespace ZeroGame.Networking
             responses = new BuglyResponse[urls.Length]; clocks = new Stopwatch[urls.Length]; Options = BuglySdkManager.CreateRequestOptions();
         }
 
-        // Resolve configuration at request creation, on Unity's main thread.
+        // One-line HTTP dispatch: read configured URLs, start immediately, and own cleanup.
         public static BuglyWebRequest Post(string api, WWWForm form)
         {
-            return new BuglyWebRequest(api, form, BuglyUrlConfig.Load());
+            return StartOwned(new BuglyWebRequest(api, form, BuglyUrlConfig.Load()));
         }
 
-        [Obsolete("URLs are now read from the text configuration. The urls argument is ignored; use Post(api, form).")]
+        // Explicit URLs never read or fall back to text configuration. Configure, then send.
         public static BuglyWebRequest Post(string api, WWWForm form, params string[] urls)
         {
-            return Post(api, form);
+            return new BuglyWebRequest(api, form, urls);
+        }
+
+        // Callback convenience API. Each URL invokes its final callback once, after retries.
+        public static BuglyWebRequest Post(string api, WWWForm form, string[] urls, Action<BuglyResponse> onComplete)
+        {
+            if (onComplete == null) throw new ArgumentNullException("onComplete");
+            var request = new BuglyWebRequest(api, form, urls);
+            request.UrlCompleted += onComplete;
+            return StartOwned(request);
+        }
+
+        private static BuglyWebRequest StartOwned(BuglyWebRequest request)
+        {
+            request.autoDispose = true;
+            try { request.SendWebRequest(); return request; }
+            catch { request.Dispose(); throw; }
         }
 
         // Unity main thread only. Requests are started once and complete independently.
@@ -184,6 +200,7 @@ namespace ZeroGame.Networking
                 jobs.Clear();
 #endif
                 operation.Complete();
+                if (autoDispose) Dispose();
             }
         }
 
