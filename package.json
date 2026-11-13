@@ -5,8 +5,8 @@
   "description": "Android OkHttp/URLConnection requests with Bugly network monitoring and deduplicated net_cost events.",
   "unity": "2022.3",
   "dependencies": {
-    "com.thinkingdata.analytics": "3.5.0",
-    "cn.com.zerogame.bugly-android": "4.4.8"
+    "com.thinkingdata.analytics": "https://github.com/ThinkingDataAnalytics/unity-sdk.git#v3.5.0",
+    "cn.com.zerogame.bugly-android": "https://github.com/linfuqing/BuglyWebRequest.git?path=/Dependencies~/cn.com.zerogame.bugly-android"
   },
   "samples": [
     {
