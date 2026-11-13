@@ -12,14 +12,20 @@ namespace ZeroGame.Networking
 {
     public sealed class BuglyWebRequestOperation : CustomYieldInstruction
     {
-        public BuglyWebRequest webRequest { get; private set; }
-        public bool isDone { get { return webRequest.isDone; } }
-        public override bool keepWaiting { get { return !isDone; } }
-        public event Action<BuglyWebRequestOperation> completed;
-        internal BuglyWebRequestOperation(BuglyWebRequest owner) { webRequest = owner; }
+        public BuglyWebRequest WebRequest { get; private set; }
+        public bool IsDone { get { return WebRequest.IsDone; } }
+        public override bool keepWaiting { get { return !IsDone; } }
+        public event Action<BuglyWebRequestOperation> Completed;
+        [Obsolete("Use WebRequest instead.")]
+        public BuglyWebRequest webRequest { get { return WebRequest; } }
+        [Obsolete("Use IsDone instead.")]
+        public bool isDone { get { return IsDone; } }
+        [Obsolete("Use Completed instead.")]
+        public event Action<BuglyWebRequestOperation> completed { add { Completed += value; } remove { Completed -= value; } }
+        internal BuglyWebRequestOperation(BuglyWebRequest owner) { WebRequest = owner; }
         internal void Complete()
         {
-            var handlers = completed;
+            var handlers = Completed;
             if (handlers == null) return;
             foreach (Action<BuglyWebRequestOperation> handler in handlers.GetInvocationList())
                 try { handler(this); } catch (Exception error) { Debug.LogException(error); }
@@ -44,33 +50,48 @@ namespace ZeroGame.Networking
         private NativeCallback nativeCallback;
 #endif
         public RequestOptions Options { get; private set; }
-        public bool isDone { get; private set; }
-        public float progress { get { return (float)count / responses.Length; } }
+        public bool IsDone { get; private set; }
+        public float Progress { get { return (float)count / responses.Length; } }
         public IReadOnlyList<BuglyResponse> Responses { get { return Array.AsReadOnly(responses); } }
         public event Action<BuglyResponse> UrlCompleted;
-        public BuglyDownloadHandler downloadHandler
+        public BuglyDownloadHandler DownloadHandler
         {
             get
             {
                 RequireSingleUrl();
-                return new BuglyDownloadHandler { data = responses[0] == null ? null : responses[0].Data };
+                return new BuglyDownloadHandler { Data = responses[0] == null ? null : responses[0].Data };
             }
         }
-        public long responseCode { get { RequireSingleUrl(); return responses[0] == null ? 0 : responses[0].ResponseCode; } }
-        public string error
+        public long ResponseCode { get { RequireSingleUrl(); return responses[0] == null ? 0 : responses[0].ResponseCode; } }
+        public string Error
         {
             get { foreach (var response in responses) if (response != null && !response.Success) return response.FailureReason; return null; }
         }
-        public RequestResult result
+        public RequestResult Result
         {
             get
             {
-                if (!isDone) return RequestResult.InProgress;
+                if (!IsDone) return RequestResult.InProgress;
                 foreach (var response in responses) if (!response.Success) return response.Result;
                 return RequestResult.Success;
             }
         }
-        public int timeout { get { return Options.timeoutSeconds; } set { if (sent) throw new InvalidOperationException("Already sent"); Options.timeoutSeconds = value; } }
+        public int Timeout { get { return Options.TimeoutSeconds; } set { if (sent) throw new InvalidOperationException("Already sent"); Options.TimeoutSeconds = value; } }
+
+        [Obsolete("Use IsDone instead.")]
+        public bool isDone { get { return IsDone; } }
+        [Obsolete("Use Progress instead.")]
+        public float progress { get { return Progress; } }
+        [Obsolete("Use DownloadHandler instead.")]
+        public BuglyDownloadHandler downloadHandler { get { return DownloadHandler; } }
+        [Obsolete("Use ResponseCode instead.")]
+        public long responseCode { get { return ResponseCode; } }
+        [Obsolete("Use Error instead.")]
+        public string error { get { return Error; } }
+        [Obsolete("Use Result instead.")]
+        public RequestResult result { get { return Result; } }
+        [Obsolete("Use Timeout instead.")]
+        public int timeout { get { return Timeout; } set { Timeout = value; } }
 
         private BuglyWebRequest(string api, WWWForm form, string[] urls)
         {
@@ -92,7 +113,17 @@ namespace ZeroGame.Networking
             responses = new BuglyResponse[urls.Length]; clocks = new Stopwatch[urls.Length]; Options = BuglySdkManager.CreateRequestOptions();
         }
 
-        public static BuglyWebRequest Post(string api, WWWForm form, params string[] urls) { return new BuglyWebRequest(api, form, urls); }
+        // Resolve configuration at request creation, on Unity's main thread.
+        public static BuglyWebRequest Post(string api, WWWForm form)
+        {
+            return new BuglyWebRequest(api, form, BuglyUrlConfig.Load());
+        }
+
+        [Obsolete("URLs are now read from the text configuration. The urls argument is ignored; use Post(api, form).")]
+        public static BuglyWebRequest Post(string api, WWWForm form, params string[] urls)
+        {
+            return Post(api, form);
+        }
 
         // Unity main thread only. Requests are started once and complete independently.
         public BuglyWebRequestOperation SendWebRequest()
@@ -109,12 +140,12 @@ namespace ZeroGame.Networking
                 {
                     using (var bridge = new AndroidJavaClass("cn.zero3d.buglywebrequest.WireBridge"))
                         jobs.Add(bridge.CallStatic<AndroidJavaObject>("submit", i, urls[i], body, headerNames, headerValues,
-                            (int)snapshot.transport, snapshot.timeoutSeconds, snapshot.maxAttempts, snapshot.retryDelayMs,
-                            snapshot.maxResponseBytes, BuglySdk.IsInitialized, nativeCallback));
+                            (int)snapshot.Transport, snapshot.TimeoutSeconds, snapshot.MaxAttempts, snapshot.RetryDelayMs,
+                            snapshot.MaxResponseBytes, BuglySdk.IsInitialized, nativeCallback));
                 }
                 catch (Exception exception) { Queue(Failure(i, "bridge_error:" + exception.GetType().Name)); }
             }
-            BuglySdk.LogInfo("[BuglyWebRequest] Android " + snapshot.transport + "; urls=" + urls.Length);
+            BuglySdk.LogInfo("[BuglyWebRequest] Android " + snapshot.Transport + "; urls=" + urls.Length);
 #else
             for (int i = 0; i < urls.Length; i++) runner.StartCoroutine(RunManaged(i));
             BuglySdk.LogInfo("[BuglyWebRequest] UnityWebRequest fallback (Editor/WebGL/desktop); urls=" + urls.Length);
@@ -126,7 +157,7 @@ namespace ZeroGame.Networking
         private BuglyResponse Failure(int index, string reason)
         {
             return new BuglyResponse { Index = index, Api = api, Url = urls[index], Data = new byte[0],
-                FailureReason = reason, Success = false, Transport = snapshot.transport,
+                FailureReason = reason, Success = false, Transport = snapshot.Transport,
                 DurationMs = clocks[index] == null ? 0 : clocks[index].ElapsedMilliseconds,
                 Result = reason == "canceled" ? RequestResult.Canceled : RequestResult.ConnectionError };
         }
@@ -139,15 +170,15 @@ namespace ZeroGame.Networking
             {
                 if (response.Index < 0 || response.Index >= responses.Length || responses[response.Index] != null) continue;
                 responses[response.Index] = response; count++;
-                if (snapshot.reportNetCost) BuglySdk.Reporter.Report(response, Debug.isDebugBuild);
+                if (snapshot.ReportNetCost) BuglySdk.Reporter.Report(response, Debug.isDebugBuild);
                 var handlers = UrlCompleted;
                 if (handlers != null)
                     foreach (Action<BuglyResponse> handler in handlers.GetInvocationList())
                         try { handler(response); } catch (Exception error) { Debug.LogException(error); }
             }
-            if (!isDone && count == urls.Length)
+            if (!IsDone && count == urls.Length)
             {
-                isDone = true;
+                IsDone = true;
 #if UNITY_ANDROID && !UNITY_EDITOR
                 foreach (var job in jobs) job.Dispose();
                 jobs.Clear();
@@ -158,7 +189,7 @@ namespace ZeroGame.Networking
 
         public void Abort()
         {
-            if (!sent || isDone || aborted) return;
+            if (!sent || IsDone || aborted) return;
             aborted = true;
 #if UNITY_ANDROID && !UNITY_EDITOR
             foreach (var job in jobs)
@@ -189,7 +220,7 @@ namespace ZeroGame.Networking
                             Data = native.Call<byte[]>("getData"), ResponseCode = status, Success = success,
                             FailureReason = reason, Attempts = native.Call<int>("getAttempts"),
                             DurationMs = native.Call<long>("getDurationMs"), LastAttemptDurationMs = native.Call<long>("getLastAttemptMs"),
-                            Transport = owner.snapshot.transport,
+                            Transport = owner.snapshot.Transport,
                             Result = success ? RequestResult.Success : reason == "canceled" ? RequestResult.Canceled :
                                 status >= 400 ? RequestResult.ProtocolError : RequestResult.ConnectionError });
                     }
@@ -203,13 +234,13 @@ namespace ZeroGame.Networking
             var total = Stopwatch.StartNew();
             clocks[index] = total;
             BuglyResponse terminal = Failure(index, "connection_error");
-            for (int attempt = 1; attempt <= snapshot.maxAttempts && !aborted; attempt++)
+            for (int attempt = 1; attempt <= snapshot.MaxAttempts && !aborted; attempt++)
             {
                 var clock = Stopwatch.StartNew();
                 using (var request = new UnityWebRequest(urls[index], "POST"))
                 {
                     request.uploadHandler = new UploadHandlerRaw(body); request.downloadHandler = new DownloadHandlerBuffer();
-                    request.timeout = snapshot.timeoutSeconds;
+                    request.timeout = snapshot.TimeoutSeconds;
                     for (int h = 0; h < headerNames.Length; h++) request.SetRequestHeader(headerNames[h], headerValues[h]);
                     managedRequests.Add(request);
                     UnityWebRequestAsyncOperation started = null;
@@ -224,14 +255,14 @@ namespace ZeroGame.Networking
                     terminal.Success = started != null && request.result == UnityWebRequest.Result.Success && request.responseCode >= 200 && request.responseCode < 300;
                     bool timeout = !string.IsNullOrEmpty(request.error) && (request.error.ToLowerInvariant().Contains("timeout") || request.error.ToLowerInvariant().Contains("timed out"));
                     terminal.FailureReason = terminal.Success ? "" : aborted ? "canceled" : sendFailure ?? (timeout ? "timeout" : request.responseCode >= 400 ? "http_" + request.responseCode : "connection_error");
-                    if (terminal.Data.Length > snapshot.maxResponseBytes) { terminal.Data = new byte[0]; terminal.Success = false; terminal.FailureReason = "response_too_large"; }
+                    if (terminal.Data.Length > snapshot.MaxResponseBytes) { terminal.Data = new byte[0]; terminal.Success = false; terminal.FailureReason = "response_too_large"; }
                     terminal.LastAttemptDurationMs = clock.ElapsedMilliseconds;
                     terminal.Result = terminal.Success ? RequestResult.Success : aborted ? RequestResult.Canceled :
                         request.responseCode >= 400 ? RequestResult.ProtocolError : RequestResult.ConnectionError;
                 }
                 bool retry = terminal.ResponseCode == 0 || terminal.ResponseCode == 408 || terminal.ResponseCode == 429 || terminal.ResponseCode >= 500;
-                if (terminal.Success || !retry || aborted || terminal.FailureReason == "response_too_large" || terminal.FailureReason.StartsWith("send_error:", StringComparison.Ordinal) || attempt == snapshot.maxAttempts) break;
-                yield return new WaitForSecondsRealtime(Math.Min(2000L, (long)snapshot.retryDelayMs * attempt) / 1000f);
+                if (terminal.Success || !retry || aborted || terminal.FailureReason == "response_too_large" || terminal.FailureReason.StartsWith("send_error:", StringComparison.Ordinal) || attempt == snapshot.MaxAttempts) break;
+                yield return new WaitForSecondsRealtime(Math.Min(2000L, (long)snapshot.RetryDelayMs * attempt) / 1000f);
             }
             terminal.DurationMs = total.ElapsedMilliseconds;
             if (aborted) { terminal.Success = false; terminal.FailureReason = "canceled"; terminal.Result = RequestResult.Canceled; }
@@ -256,7 +287,7 @@ namespace ZeroGame.Networking
         public void Add(BuglyWebRequest request) { requests.Add(request); }
         private void Update()
         {
-            for (int i = requests.Count - 1; i >= 0; i--) { requests[i].Pump(); if (requests[i].isDone) requests.RemoveAt(i); }
+            for (int i = requests.Count - 1; i >= 0; i--) { requests[i].Pump(); if (requests[i].IsDone) requests.RemoveAt(i); }
         }
         private void OnApplicationQuit() { foreach (var request in requests) request.Abort(); }
     }

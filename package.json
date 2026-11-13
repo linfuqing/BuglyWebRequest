@@ -1,6 +1,6 @@
 {
   "name": "cn.com.zerogame.bugly-webrequest",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "displayName": "Bugly WebRequest + ThinkingData",
   "description": "Android OkHttp/URLConnection requests with Bugly network monitoring and deduplicated net_cost events.",
   "unity": "2022.3",

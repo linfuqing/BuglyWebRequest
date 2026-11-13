@@ -17,11 +17,11 @@ namespace ZeroGame.Networking
             string thinkingAppId, string thinkingServerUrl, bool enableEditorAnalytics = false)
         {
             var config = ScriptableObject.CreateInstance<BuglySdkSettings>();
-            config.buglyAppId = buglyAppId; config.buglyAppKey = buglyAppKey;
-            config.enableBugly = !string.IsNullOrWhiteSpace(buglyAppId) && !string.IsNullOrWhiteSpace(buglyAppKey);
-            config.thinkingAppId = thinkingAppId; config.thinkingServerUrl = thinkingServerUrl;
-            config.enableThinkingData = !string.IsNullOrWhiteSpace(thinkingAppId) && !string.IsNullOrWhiteSpace(thinkingServerUrl);
-            config.enableEditorAnalytics = enableEditorAnalytics;
+            config.BuglyAppId = buglyAppId; config.BuglyAppKey = buglyAppKey;
+            config.EnableBugly = !string.IsNullOrWhiteSpace(buglyAppId) && !string.IsNullOrWhiteSpace(buglyAppKey);
+            config.ThinkingAppId = thinkingAppId; config.ThinkingServerUrl = thinkingServerUrl;
+            config.EnableThinkingData = !string.IsNullOrWhiteSpace(thinkingAppId) && !string.IsNullOrWhiteSpace(thinkingServerUrl);
+            config.EnableEditorAnalytics = enableEditorAnalytics;
             try { InitializeAfterConsent(config); } finally { UnityEngine.Object.Destroy(config); }
         }
 
@@ -31,7 +31,7 @@ namespace ZeroGame.Networking
             string validation;
             if (!config.Validate(out validation)) { Debug.LogError("[BuglyWebRequest] " + validation); return false; }
 #if UNITY_ANDROID && !UNITY_EDITOR
-            if (config.enableBugly && !IsInitialized)
+            if (config.EnableBugly && !IsInitialized)
             {
                 try
                 {
@@ -39,38 +39,38 @@ namespace ZeroGame.Networking
                     using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
                     using (var context = activity.Call<AndroidJavaObject>("getApplicationContext"))
                     using (var sdk = new AndroidJavaClass("cn.zero3d.buglywebrequest.SdkBridge"))
-                        IsInitialized = sdk.CallStatic<bool>("initialize", context, config.buglyAppId, config.buglyAppKey,
-                            Application.version, config.buglyDebugMode, Debug.isDebugBuild, config.buglyRegion == BuglyRegion.Overseas, config.buglyEnableNativeLogs, config.buglyUserId ?? "", config.buglyFilterLocalRequests);
+                        IsInitialized = sdk.CallStatic<bool>("initialize", context, config.BuglyAppId, config.BuglyAppKey,
+                            Application.version, config.BuglyDebugMode, Debug.isDebugBuild, config.BuglyRegion == BuglyRegion.Overseas, config.BuglyEnableNativeLogs, config.BuglyUserId ?? "", config.BuglyFilterLocalRequests);
                 }
                 catch (Exception error) { Debug.LogError("[BuglyWebRequest] Bugly init failed: " + error.GetType().Name); }
             }
 #endif
             bool platformAllowed = Application.platform == RuntimePlatform.Android ||
-                (Application.isEditor && config.enableEditorAnalytics);
-            if (config.enableThinkingData && !ThinkingDataReady && platformAllowed)
+                (Application.isEditor && config.EnableEditorAnalytics);
+            if (config.EnableThinkingData && !ThinkingDataReady && platformAllowed)
             {
                 try
                 {
-                    if (!config.reuseThinkingDataInstance)
+                    if (!config.ReuseThinkingDataInstance)
                     {
                         var td = config.CreateThinkingConfig();
-                        TDAnalytics.EnableLog(config.thinkingEnableLog);
+                        TDAnalytics.EnableLog(config.ThinkingEnableLog);
                         TDAnalytics.Init(td);
-                        TDAnalytics.SetNetworkType(config.thinkingNetworkType, config.thinkingAppId);
+                        TDAnalytics.SetNetworkType(config.ThinkingNetworkType, config.ThinkingAppId);
                     }
-                    UseInitializedThinkingData(config.thinkingAppId, config.enableEditorAnalytics);
+                    UseInitializedThinkingData(config.ThinkingAppId, config.EnableEditorAnalytics);
                 }
                 catch (Exception error) { Debug.LogError("[BuglyWebRequest] ThinkingData init failed: " + error.GetType().Name); }
             }
             LogInfo("[BuglyWebRequest] Bugly ready=" + IsInitialized + "; ThinkingData ready=" + ThinkingDataReady);
-            bool needsBugly = config.enableBugly && Application.platform == RuntimePlatform.Android && !Application.isEditor;
-            return (!needsBugly || IsInitialized) && (!config.enableThinkingData || !platformAllowed || ThinkingDataReady);
+            bool needsBugly = config.EnableBugly && Application.platform == RuntimePlatform.Android && !Application.isEditor;
+            return (!needsBugly || IsInitialized) && (!config.EnableThinkingData || !platformAllowed || ThinkingDataReady);
         }
 
         internal static void LogInfo(string message)
         {
             var config = BuglySdkManager.CurrentSettings;
-            if (config == null || config.enableSdkLogs) Debug.Log(message);
+            if (config == null || config.EnableSdkLogs) Debug.Log(message);
         }
 
         // For consumer projects that already initialize TDAnalytics themselves.

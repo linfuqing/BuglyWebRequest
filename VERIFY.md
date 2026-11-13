@@ -47,3 +47,21 @@ Android/WebGL/Editor Runtime、Editor Inspector/菜单/Demo、Java 地区参数�
 
 0.2.4发行检查：Runtime Android/WebGL/Editor及Demo编译PASS；Java桥接对实际Bugly4.4.8.2依赖编译PASS；分发目录凭据/真实服务器地址扫描PASS。Java首次检查引用旧Temp依赖路径失败，改为从Gradle实际缓存提取classes.jar后通过，非代码错误。
 
+
+## URL 文本配置 0.3.1（2026-11-13）
+
+- 新增 Runtime/BuglyUrlConfig.cs 与 Runtime/Resources/BuglyWebRequestDefaultUrls.txt。
+- 使用 Unity 2022.3.62f3 真实程序集编译 Runtime（UNITY_EDITOR/UNITY_ANDROID）与 Demo 通过。
+- 解析验证 PASS：多地址顺序、BOM、CRLF、空行、整行注释、URL fragment 保留、非法协议/非法行/空配置拒绝、默认三个地址。
+- Tests~/UrlConfigTests.cs 为独立解析测试，不在 Unity 游戏程序集中编译。
+- 本次未重新构建 Android/WebGL Player，未向服务器发送请求；未执行 Git 提交或推送。
+
+- 随后将读取入口移到主 API：Post(api, form) 和兼容旧签名均统一读取文本；Runtime 与 Demo 再次编译通过。
+
+## 公开命名统一 0.3.2（2026-11-13）
+
+- Runtime（Editor/Android/WebGL 条件）、Editor 和 Demo 使用 Unity 2022.3.62f3 实际程序集编译通过。
+- NamingTests PASS：28 个配置字段迁移属性及兼容别名、旧选项读写转发、新命名 API、请求配置克隆隔离。
+- 测试验证迁移标记及转发行为；本次未在 Unity 中实际重开旧序列化资源，也未构建或运行真机 Player。
+- 测试源文件位于 Tests~/NamingTests.cs，正式包不编译该目录。
+- 未修改原生 Java、数数 SDK 或埋点协议键；未发送网络请求，未提交或推送。

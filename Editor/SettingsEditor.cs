@@ -26,15 +26,15 @@ namespace ZeroGame.Networking.Editor
             serializedObject.Update();
             var property = serializedObject.GetIterator();
             bool children = true;
-            bool reuse = serializedObject.FindProperty("reuseThinkingDataInstance").boolValue;
+            bool reuse = serializedObject.FindProperty("ReuseThinkingDataInstance").boolValue;
             while (property.NextVisible(children))
             {
                 children = false;
                 if (property.name == "m_Script") { using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(property); continue; }
-                if (reuse && (property.name == "thinkingMode" || property.name == "thinkingTimeZone" ||
-                    property.name == "thinkingTimeZoneId" || property.name == "thinkingNetworkType" || property.name == "thinkingEnableLog")) continue;
-                if (property.name == "thinkingTimeZoneId" && serializedObject.FindProperty("thinkingTimeZone").intValue != (int)TDTimeZone.Other) continue;
-                if (property.name == "buglyAppKey") property.stringValue = EditorGUILayout.PasswordField("Bugly App Key", property.stringValue);
+                if (reuse && (property.name == "ThinkingMode" || property.name == "ThinkingTimeZone" ||
+                    property.name == "ThinkingTimeZoneId" || property.name == "ThinkingNetworkType" || property.name == "ThinkingEnableLog")) continue;
+                if (property.name == "ThinkingTimeZoneId" && serializedObject.FindProperty("ThinkingTimeZone").intValue != (int)TDTimeZone.Other) continue;
+                if (property.name == "BuglyAppKey") property.stringValue = EditorGUILayout.PasswordField("Bugly App Key", property.stringValue);
                 else EditorGUILayout.PropertyField(property, true);
             }
             serializedObject.ApplyModifiedProperties();

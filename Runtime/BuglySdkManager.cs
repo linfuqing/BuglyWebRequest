@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace ZeroGame.Networking
 {
@@ -6,7 +8,10 @@ namespace ZeroGame.Networking
     public sealed class BuglySdkManager : MonoBehaviour
     {
         private static BuglySdkManager instance;
-        public BuglySdkSettings settings;
+        [FormerlySerializedAs("settings")]
+        public BuglySdkSettings Settings;
+        [Obsolete("Use Settings instead.")]
+        public BuglySdkSettings settings { get { return Settings; } set { Settings = value; } }
         private BuglySdkSettings applied;
         public bool HasConsent { get; private set; }
         public bool IsReady { get; private set; }
@@ -24,7 +29,7 @@ namespace ZeroGame.Networking
         public static BuglySdkSettings CurrentSettings
         {
             get { return instance != null && instance.applied != null ? instance.applied :
-                instance != null && instance.settings != null ? instance.settings : Resources.Load<BuglySdkSettings>(BuglySdkSettings.ResourceName); }
+                instance != null && instance.Settings != null ? instance.Settings : Resources.Load<BuglySdkSettings>(BuglySdkSettings.ResourceName); }
         }
         internal static RequestOptions CreateRequestOptions()
         {
@@ -35,9 +40,9 @@ namespace ZeroGame.Networking
         private static void InitializeOnStartup()
         {
             var config = Resources.Load<BuglySdkSettings>(BuglySdkSettings.ResourceName);
-            if (config == null || !config.initializeOnStartup) return;
+            if (config == null || !config.InitializeOnStartup) return;
             var manager = Instance;
-            manager.settings = config;
+            manager.Settings = config;
             // The host obtained consent before download; no consent record is persisted here.
             manager.InitializeAfterConsent();
             BuglySdk.LogInfo("[BuglyWebRequest] Startup initialization: ready=" + manager.IsReady +
@@ -48,7 +53,7 @@ namespace ZeroGame.Networking
         {
             if (instance != null && instance != this) { Destroy(this); return; }
             instance = this;
-            if (settings == null) settings = Resources.Load<BuglySdkSettings>(BuglySdkSettings.ResourceName);
+            if (Settings == null) Settings = Resources.Load<BuglySdkSettings>(BuglySdkSettings.ResourceName);
             DontDestroyOnLoad(gameObject);
         }
 
@@ -58,7 +63,7 @@ namespace ZeroGame.Networking
         {
             if (IsReady) return true;
             HasConsent = true;
-            var config = applied != null ? applied : settings != null ? settings : CurrentSettings;
+            var config = applied != null ? applied : Settings != null ? Settings : CurrentSettings;
             string error = "";
             if (config == null || !config.Validate(out error))
             {
