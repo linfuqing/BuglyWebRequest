@@ -40,7 +40,7 @@ namespace ZeroGame.Networking
                     using (var context = activity.Call<AndroidJavaObject>("getApplicationContext"))
                     using (var sdk = new AndroidJavaClass("cn.zero3d.buglywebrequest.SdkBridge"))
                         IsInitialized = sdk.CallStatic<bool>("initialize", context, config.BuglyAppId, config.BuglyAppKey,
-                            Application.version, config.BuglyDebugMode, Debug.isDebugBuild, config.BuglyRegion == BuglyRegion.Overseas, config.BuglyEnableNativeLogs, config.BuglyUserId ?? "", config.BuglyFilterLocalRequests);
+                            Application.version, config.BuglyDebugMode, Debug.isDebugBuild, config.BuglyRegion == BuglyRegion.Overseas, config.BuglyEnableNativeLogs, "", config.BuglyFilterLocalRequests);
                 }
                 catch (Exception error) { Debug.LogError("[BuglyWebRequest] Bugly init failed: " + error.GetType().Name); }
             }

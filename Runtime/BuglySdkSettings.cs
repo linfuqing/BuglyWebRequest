@@ -24,9 +24,6 @@ namespace ZeroGame.Networking
         public string BuglyAppId = "";
         [FormerlySerializedAs("buglyAppKey")]
         public string BuglyAppKey = "";
-        [Tooltip("Bugly 用户 ID；用于匹配后台用户白名单。必须在初始化前配置。" )]
-        [FormerlySerializedAs("buglyUserId")]
-        public string BuglyUserId = "";
         [FormerlySerializedAs("buglyRegion")]
         public BuglyRegion BuglyRegion = BuglyRegion.Overseas;
         [FormerlySerializedAs("buglyDebugMode")]
@@ -80,8 +77,6 @@ namespace ZeroGame.Networking
         public string buglyAppId { get { return BuglyAppId; } set { BuglyAppId = value; } }
         [Obsolete("Use BuglyAppKey instead.")]
         public string buglyAppKey { get { return BuglyAppKey; } set { BuglyAppKey = value; } }
-        [Obsolete("Use BuglyUserId instead.")]
-        public string buglyUserId { get { return BuglyUserId; } set { BuglyUserId = value; } }
         [Obsolete("Use BuglyRegion instead.")]
         public BuglyRegion buglyRegion { get { return BuglyRegion; } set { BuglyRegion = value; } }
         [Obsolete("Use BuglyDebugMode instead.")]
