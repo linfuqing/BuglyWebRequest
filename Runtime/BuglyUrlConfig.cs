@@ -9,13 +9,31 @@ namespace ZeroGame.Networking
         public const string ProjectResourceName = "BuglyWebRequestUrls";
         public const string DefaultResourceName = "BuglyWebRequestDefaultUrls";
 
+        private static string[] cachedUrls;
+
+        // Also reset between Editor play sessions when domain reload is disabled.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCache()
+        {
+            cachedUrls = null;
+        }
+
+        /// <summary>Loads and parses once per run; returns a copy so callers cannot change the cache.</summary>
         public static string[] Load()
         {
+            return (string[])LoadCached().Clone();
+        }
+
+        // Trace already copies the URLs into its request, so it need not allocate another copy here.
+        internal static string[] LoadCached()
+        {
+            if (cachedUrls != null) return cachedUrls;
             var asset = Resources.Load<TextAsset>(ProjectResourceName);
             if (asset == null) asset = Resources.Load<TextAsset>(DefaultResourceName);
             if (asset == null)
                 throw new InvalidOperationException("[BuglyWebRequest][URL配置] 两份 URL 文本均未找到。请创建 Assets/Resources/" + ProjectResourceName + ".txt，或恢复 SDK 中的 Runtime/Resources/" + DefaultResourceName + ".txt；每行填写一个完整 HTTP(S) URL。");
-            return Parse(asset.text, "Resources/" + asset.name + ".txt");
+            cachedUrls = Parse(asset.text, "Resources/" + asset.name + ".txt");
+            return cachedUrls;
         }
 
         public static string[] Parse(string text)

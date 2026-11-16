@@ -121,7 +121,7 @@ namespace ZeroGame.Networking
         {
             ValidateEventName(eventName);
             string[] configuredUrls;
-            try { configuredUrls = BuglyUrlConfig.Load(); }
+            try { configuredUrls = BuglyUrlConfig.LoadCached(); }
             catch (Exception error)
             {
                 throw new InvalidOperationException("[BuglyWebRequest][Trace.UrlConfiguration] eventName='" + eventName + "'：读取文本 URL 配置失败。原始原因：" + error.Message, error);
