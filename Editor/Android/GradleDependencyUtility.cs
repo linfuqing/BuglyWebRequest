@@ -7,21 +7,30 @@ namespace ZeroGame.Networking.Editor
     internal static class GradleDependencyUtility
     {
         private static readonly string[] Defaults = {
-            "com.tencent.bugly:bugly-pro:4.4.8.2",
+            "com.tencent.bugly_16kb:bugly-pro:4.4.8.2",
             "com.squareup.okhttp3:okhttp:3.12.13",
             "com.squareup.okhttp3:okhttp-sse:3.12.13"
         };
 
-        internal static string EnsureDependencies(string gradle, Action<string> log)
+        internal static string EnsureDependencies(string gradle, Action<string> log, Action<string> warning = null)
         {
             if (gradle == null) throw new ArgumentNullException("gradle", "[BuglyAndroid] Gradle 文件内容不能为 null。");
+            bool legacyBugly = ContainsDependency(gradle, "com.tencent.bugly", "bugly-pro");
+            bool bugly16k = ContainsDependency(gradle, "com.tencent.bugly_16kb", "bugly-pro");
+            if (legacyBugly && bugly16k)
+                throw new InvalidOperationException("[BuglyAndroid][16KB] Gradle 同时声明了普通版 com.tencent.bugly:bugly-pro 和 16 KB 版 com.tencent.bugly_16kb:bugly-pro，两者含重复 Java 类和原生库。请仅保留一个制品；发布 Google Play 应使用 16 KB 版。SDK 未自动删除使用者的依赖。");
+            if (legacyBugly)
+            {
+                var report = warning ?? log;
+                if (report != null) report("[BuglyWebRequest][16KB] 工程已显式声明普通版 com.tencent.bugly:bugly-pro。SDK 保留现有版本，不另加重复制品；普通版不能据此认定支持 16 KB。发布 Google Play 请将该声明改为 com.tencent.bugly_16kb:bugly-pro，并检查最终包。");
+            }
             foreach (var coordinate in Defaults)
             {
                 var parts = coordinate.Split(':');
                 string module = parts[0] + ":" + parts[1];
-                if (ContainsDependency(gradle, parts[0], parts[1]))
+                if ((parts[0] == "com.tencent.bugly_16kb" && legacyBugly) || ContainsDependency(gradle, parts[0], parts[1]))
                 {
-                    if (log != null) log("[BuglyWebRequest] Gradle 已声明 " + module + "，保留工程版本，不重复添加。");
+                    if (log != null) log("[BuglyWebRequest] Gradle 已声明 " + (parts[0] == "com.tencent.bugly_16kb" && legacyBugly ? "com.tencent.bugly:bugly-pro" : module) + "，保留工程版本，不重复添加。");
                     continue;
                 }
                 gradle += "\ndependencies { implementation '" + coordinate + "' }\n";

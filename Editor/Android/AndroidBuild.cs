@@ -44,7 +44,7 @@ namespace ZeroGame.Networking.Editor
                 "-keep class cn.thinkingdata.analytics.ThinkingAnalyticsSDK { public void track(java.lang.String, org.json.JSONObject); }\n" );
             var gradlePath = Path.Combine(path, "build.gradle");
             var gradle = File.ReadAllText(gradlePath);
-            gradle = GradleDependencyUtility.EnsureDependencies(gradle, message => Debug.Log(message));
+            gradle = GradleDependencyUtility.EnsureDependencies(gradle, message => Debug.Log(message), message => Debug.LogWarning(message));
             if (!gradle.Contains("consumerProguardFiles 'bugly-webrequest.pro'"))
                 gradle += "\nandroid { defaultConfig { consumerProguardFiles 'bugly-webrequest.pro' } }\n";
             File.WriteAllText(gradlePath, gradle);
