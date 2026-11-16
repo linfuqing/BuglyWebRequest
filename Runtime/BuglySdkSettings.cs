@@ -44,8 +44,10 @@ namespace ZeroGame.Networking
 
         [Header("测试与日志")]
         public bool EnableEditorAnalytics;
-        [Tooltip("SDK 信息日志开关；失败日志和规范要求的 net_cost 确认日志仍保留。")]
+        [Tooltip("SDK 信息日志开关；net_cost 正常结果日志由 EnableNetCostLogs 控制，错误仍输出。")]
         public bool EnableSdkLogs = true;
+        [Tooltip("打印正常成功且已交给数数的 net_cost 结果；默认关闭。请求失败、未上报或埋点异常仍打印，不影响实际埋点。") ]
+        public bool EnableNetCostLogs;
 
         public bool Validate(out string error)
         {

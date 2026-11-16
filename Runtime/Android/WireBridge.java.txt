@@ -16,6 +16,7 @@ public final class WireBridge {
     private static final ScheduledExecutorService timers = Executors.newScheduledThreadPool(8, task -> {
         Thread thread = new Thread(task, "BuglyWebRequest-timeout"); thread.setDaemon(true); return thread;
     });
+    private static final byte[] EMPTY = new byte[0];
     private static final OkHttpClient baseClient = new OkHttpClient.Builder().retryOnConnectionFailure(false).build();
     private static final class Attempt {
         final long started = System.nanoTime();
@@ -26,7 +27,7 @@ public final class WireBridge {
     }
 
     public static final class Result {
-        private byte[] data = new byte[0];
+        private byte[] data = EMPTY;
         private int status, attempts;
         private long durationMs, lastAttemptMs;
         private boolean success;
@@ -75,16 +76,17 @@ public final class WireBridge {
     }
 
     private static long elapsed(long start) { return Math.max(0, Math.round((System.nanoTime()-start)/1000000.0)); }
-    private static byte[] read(InputStream stream, int limit) throws IOException {
-        try (InputStream input=stream; ByteArrayOutputStream output=new ByteArrayOutputStream()) {
+    private static byte[] read(InputStream stream, int limit, boolean retainBody) throws IOException {
+        try (InputStream input=stream; ByteArrayOutputStream output=retainBody?new ByteArrayOutputStream():null) {
             if (input != null) {
-                byte[] buffer=new byte[8192]; int count;
+                byte[] buffer=new byte[8192]; int count; long received=0;
                 while ((count=input.read(buffer)) != -1) {
-                    if ((long)output.size()+count > limit) throw new ResponseTooLarge();
-                    output.write(buffer,0,count);
+                    received+=count;
+                    if (received > limit) throw new ResponseTooLarge();
+                    if (output != null) output.write(buffer,0,count);
                 }
             }
-            return output.toByteArray();
+            return output == null ? EMPTY : output.toByteArray();
         }
     }
     private static final class ResponseTooLarge extends IOException { }
@@ -93,12 +95,32 @@ public final class WireBridge {
         int transport, int timeoutSeconds, int maxAttempts, int retryDelayMs, int maxResponseBytes,
         boolean monitor, Callback callback) {
         Job job=new Job(index,url,callback);
-        workers.execute(() -> run(job,body,names,values,transport,timeoutSeconds,maxAttempts,retryDelayMs,maxResponseBytes,monitor));
+        workers.execute(() -> run(job,body,names,values,transport,timeoutSeconds,maxAttempts,retryDelayMs,maxResponseBytes,monitor,true));
         return job;
     }
 
+    public static final class Batch {
+        private final Job[] jobs;
+        private Batch(Job[] jobs) { this.jobs=jobs; }
+        public void cancel() { for (Job job:jobs) job.cancel(); }
+    }
+
+    /** One JNI submission; each URL keeps independent retries, cancellation and final callback. */
+    public static Batch submitBatch(String[] urls, byte[] body, String[] names, String[] values,
+        int transport, int timeoutSeconds, int maxAttempts, int retryDelayMs, int maxResponseBytes,
+        boolean monitor, Callback callback) {
+        Job[] jobs=new Job[urls.length];
+        for (int i=0;i<urls.length;i++) jobs[i]=new Job(i,urls[i],callback);
+        Batch batch=new Batch(jobs);
+        try {
+            for (Job job:jobs)
+                workers.execute(() -> run(job,body,names,values,transport,timeoutSeconds,maxAttempts,retryDelayMs,maxResponseBytes,monitor,false));
+        } catch (RuntimeException error) { batch.cancel(); throw error; }
+        return batch;
+    }
+
     private static void run(Job job, byte[] body, String[] names, String[] values, int transport,
-        int timeoutSeconds, int maxAttempts, int retryDelayMs, int limit, boolean monitor) {
+        int timeoutSeconds, int maxAttempts, int retryDelayMs, int limit, boolean monitor, boolean retainBody) {
         job.worker=Thread.currentThread();
         if (job.finished.get()) { job.worker=null; return; }
         job.started=System.nanoTime();
@@ -125,7 +147,7 @@ public final class WireBridge {
                         if (job.canceled.get() || control.timedOut.get()) control.call.cancel();
                         try (Response response=control.call.execute()) {
                             result.status=response.code();
-                            result.data=read(response.body()==null?null:response.body().byteStream(),limit);
+                            result.data=read(response.body()==null?null:response.body().byteStream(),limit,retainBody);
                         }
                     } else {
                         HttpURLConnection connection=(HttpURLConnection)target.openConnection();
@@ -138,7 +160,7 @@ public final class WireBridge {
                         for (int i=0;i<names.length;i++) connection.setRequestProperty(names[i],values[i]);
                         try (OutputStream output=connection.getOutputStream()) { output.write(body); }
                         result.status=connection.getResponseCode();
-                        result.data=read(result.status>=400?connection.getErrorStream():connection.getInputStream(),limit);
+                        result.data=read(result.status>=400?connection.getErrorStream():connection.getInputStream(),limit,retainBody);
                     }
                     if (control.timedOut.get()) throw new SocketTimeoutException();
                     result.success=result.status>=200 && result.status<300;

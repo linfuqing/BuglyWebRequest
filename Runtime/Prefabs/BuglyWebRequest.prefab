@@ -72,3 +72,4 @@ MonoBehaviour:
       ReportNetCost: 1
     EnableEditorAnalytics: 0
     EnableSdkLogs: 1
+    EnableNetCostLogs: 0

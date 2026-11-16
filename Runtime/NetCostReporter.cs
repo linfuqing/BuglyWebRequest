@@ -17,7 +17,7 @@ namespace ZeroGame.Networking
         public INetCostSink Sink { get; set; }
         public NetCostReporter(Action<string> logger) { log = logger ?? (_ => { }); }
 
-        public void Report(BuglyResponse response, bool debug)
+        public void Report(BuglyResponse response, bool debug, bool logSuccessfulReports = true)
         {
             if (response.ReportAttempted) return;
             response.ReportAttempted = true;
@@ -41,6 +41,7 @@ namespace ZeroGame.Networking
                 }
             }
             catch (Exception error) { trackError = error.GetType().Name; }
+            if (!logSuccessfulReports && response.Success && reported && trackError.Length == 0) return;
             // Do not log response bodies, query strings, tokens or SDK exception messages.
             log("[net_cost] debug=" + Lower(debug) + " api=" + response.EventName +
                 " duration_ms=" + Math.Max(0L, response.DurationMs) + " success=" + Lower(response.Success) +

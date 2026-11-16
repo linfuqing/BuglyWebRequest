@@ -33,27 +33,35 @@ namespace ZeroGame.Networking
         private readonly byte[] body;
         private readonly BuglyResponse[] responses;
         private readonly ConcurrentQueue<BuglyResponse> incoming = new ConcurrentQueue<BuglyResponse>();
+#if !UNITY_ANDROID || UNITY_EDITOR
         private readonly List<UnityWebRequest> managedRequests = new List<UnityWebRequest>();
         private readonly Stopwatch[] clocks;
+#endif
+        private readonly bool trace;
+        private readonly IReadOnlyList<BuglyResponse> responseView;
+        private BuglyDownloadHandler downloadHandler;
+        private bool logSuccessfulReports;
         private bool sent, disposed, aborted, autoDispose, reportNetCost;
         private int count;
         private RequestOptions snapshot;
         private BuglyWebRequestOperation operation;
 #if UNITY_ANDROID && !UNITY_EDITOR
-        private readonly List<AndroidJavaObject> jobs = new List<AndroidJavaObject>();
+        private AndroidJavaObject nativeJob;
         private NativeCallback nativeCallback;
 #endif
         public RequestOptions Options { get; private set; }
         public bool IsDone { get; private set; }
         public float Progress { get { return (float)count / responses.Length; } }
-        public IReadOnlyList<BuglyResponse> Responses { get { return Array.AsReadOnly(responses); } }
+        public IReadOnlyList<BuglyResponse> Responses { get { return responseView; } }
         public event Action<BuglyResponse> UrlCompleted;
         public BuglyDownloadHandler DownloadHandler
         {
             get
             {
                 RequireSingleUrl();
-                return new BuglyDownloadHandler { Data = responses[0] == null ? null : responses[0].Data };
+                if (downloadHandler == null) downloadHandler = new BuglyDownloadHandler();
+                downloadHandler.Data = responses[0] == null ? null : responses[0].Data;
+                return downloadHandler;
             }
         }
         public long ResponseCode { get { RequireSingleUrl(); return responses[0] == null ? 0 : responses[0].ResponseCode; } }
@@ -72,21 +80,23 @@ namespace ZeroGame.Networking
         }
         public int Timeout { get { return Options.TimeoutSeconds; } set { if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest] 请求已释放，不能修改 Timeout；请创建新的请求。"); if (sent) throw new InvalidOperationException("[BuglyWebRequest] 请求已启动，不能再修改 Timeout；手动入口请在 SendWebRequest() 之前设置，自动入口请在场景 SDK 组件的 DefaultRequest 中配置。"); Options.TimeoutSeconds = value; } }
 
-        private BuglyWebRequest(string eventName, WWWForm form, string[] urls)
+        private BuglyWebRequest(string eventName, WWWForm form, string[] urls, bool trace = false)
         {
             ValidateEventName(eventName);
             if (urls == null) throw new ArgumentNullException("urls", "[BuglyWebRequest] 显式 URL 入口的 urls 不能为 null；请传入至少一个 HTTP(S) 地址。读取文本配置请使用 Trace(eventName)。");
             if (urls.Length == 0) throw new ArgumentException("[BuglyWebRequest] urls 数组为空；请传入至少一个 HTTP(S) 地址，显式入口不会回退到文本配置。", "urls");
-            this.eventName = eventName; this.urls = (string[])urls.Clone();
-            for (int index = 0; index < this.urls.Length; index++)
+            this.eventName = eventName; this.trace = trace;
+            // Cached Trace URLs are private, validated and never mutated. Explicit URLs retain a snapshot.
+            this.urls = trace ? urls : (string[])urls.Clone();
+            for (int index = 0; !trace && index < this.urls.Length; index++)
             {
                 string url = this.urls[index];
                 ValidateUrl(url, "urls", "[BuglyWebRequest] urls[" + index + "]");
             }
             if (form == null)
             {
-                body = new byte[0];
-                headerNames = new string[0]; headerValues = new string[0];
+                body = Array.Empty<byte>();
+                headerNames = Array.Empty<string>(); headerValues = Array.Empty<string>();
             }
             else
             {
@@ -103,7 +113,11 @@ namespace ZeroGame.Networking
                     throw new InvalidOperationException("[BuglyWebRequest][Request.FormSerialization] eventName='" + eventName + "'：无法读取 WWWForm 的请求体或请求头。请在 Unity 主线程创建并调用请求。原始原因：" + error.Message, error);
                 }
             }
-            responses = new BuglyResponse[urls.Length]; clocks = new Stopwatch[urls.Length];
+            responses = new BuglyResponse[urls.Length];
+            responseView = Array.AsReadOnly(responses);
+#if !UNITY_ANDROID || UNITY_EDITOR
+            clocks = new Stopwatch[urls.Length];
+#endif
             try { Options = BuglySdkManager.CreateRequestOptions(); }
             catch (Exception error)
             {
@@ -126,7 +140,7 @@ namespace ZeroGame.Networking
             {
                 throw new InvalidOperationException("[BuglyWebRequest][Trace.UrlConfiguration] eventName='" + eventName + "'：读取文本 URL 配置失败。原始原因：" + error.Message, error);
             }
-            return StartOwned(new BuglyWebRequest(eventName, form, configuredUrls));
+            return StartOwned(new BuglyWebRequest(eventName, form, configuredUrls, true));
         }
 
         /// <summary>创建单地址 POST 请求；设置参数后调用 SendWebRequest() 才开始发送。</summary>
@@ -147,7 +161,7 @@ namespace ZeroGame.Networking
             request.autoDispose = true;
             try
             {
-                request.SendWebRequest();
+                request.StartRequest(false);
                 return request;
             }
             catch (Exception startError)
@@ -168,6 +182,13 @@ namespace ZeroGame.Networking
         // Unity main thread only. Requests are started once and complete independently.
         public BuglyWebRequestOperation SendWebRequest()
         {
+            StartRequest(true);
+            return operation;
+        }
+
+        // Trace owns its lifecycle and does not need a coroutine/event wrapper allocation.
+        private void StartRequest(bool createOperation)
+        {
             if (disposed) throw new ObjectDisposedException("BuglyWebRequest", "[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：请求已被 Dispose 或自动释放，不能再次发送；请创建新的请求。");
             if (sent) throw new InvalidOperationException("[BuglyWebRequest][SendWebRequest] eventName='" + eventName + "'：同一个请求只能启动一次。Trace(eventName) 和 Trace(eventName, form) 已自动启动，不要再调用 SendWebRequest()。");
             snapshot = Options.Snapshot();
@@ -175,28 +196,39 @@ namespace ZeroGame.Networking
             bool androidPlayer = Application.platform == RuntimePlatform.Android && !Application.isEditor;
             reportNetCost = config.EnableThinkingData && snapshot.ReportNetCost &&
                 RequestInitializationGuard.SupportsThinkingData(config, androidPlayer, Application.isEditor);
+            logSuccessfulReports = config.EnableNetCostLogs;
             sent = true;
-            operation = new BuglyWebRequestOperation(this);
+            if (createOperation) operation = new BuglyWebRequestOperation(this);
             var runner = RequestRunner.Ensure(); runner.Add(this);
 #if UNITY_ANDROID && !UNITY_EDITOR
             nativeCallback = new NativeCallback(this);
-            for (int i = 0; i < urls.Length; i++)
+            try
             {
-                try
+                using (var bridge = new AndroidJavaClass("cn.zero3d.buglywebrequest.WireBridge"))
                 {
-                    using (var bridge = new AndroidJavaClass("cn.zero3d.buglywebrequest.WireBridge"))
-                        jobs.Add(bridge.CallStatic<AndroidJavaObject>("submit", i, urls[i], body, headerNames, headerValues,
+                    // Share one marshalled request body/header set across all Trace URLs.
+                    nativeJob = trace
+                        ? bridge.CallStatic<AndroidJavaObject>("submitBatch", urls, body, headerNames, headerValues,
                             (int)snapshot.Transport, snapshot.TimeoutSeconds, snapshot.MaxAttempts, snapshot.RetryDelayMs,
-                            snapshot.MaxResponseBytes, config.EnableBugly && BuglySdk.IsInitialized, nativeCallback));
+                            snapshot.MaxResponseBytes, config.EnableBugly && BuglySdk.IsInitialized, nativeCallback)
+                        : bridge.CallStatic<AndroidJavaObject>("submit", 0, urls[0], body, headerNames, headerValues,
+                            (int)snapshot.Transport, snapshot.TimeoutSeconds, snapshot.MaxAttempts, snapshot.RetryDelayMs,
+                            snapshot.MaxResponseBytes, config.EnableBugly && BuglySdk.IsInitialized, nativeCallback);
                 }
-                catch (Exception exception) { LogRequestException("Android.BridgeSubmit", i, exception); Queue(Failure(i, "bridge_error:" + exception.GetType().Name)); }
+            }
+            catch (Exception exception)
+            {
+                for (int i = 0; i < urls.Length; i++)
+                {
+                    LogRequestException("Android.BridgeSubmit", i, exception);
+                    Queue(Failure(i, "bridge_error:" + exception.GetType().Name));
+                }
             }
             BuglySdk.LogInfo("[BuglyWebRequest] Android " + snapshot.Transport + "; urls=" + urls.Length);
 #else
             for (int i = 0; i < urls.Length; i++) runner.StartCoroutine(RunManaged(i));
             BuglySdk.LogInfo("[BuglyWebRequest] UnityWebRequest fallback (Editor/WebGL/desktop); urls=" + urls.Length);
 #endif
-            return operation;
         }
 
         private static void ValidateUrl(string url, string parameter, string context)
@@ -233,9 +265,13 @@ namespace ZeroGame.Networking
         }
         private BuglyResponse Failure(int index, string reason)
         {
-            return new BuglyResponse { Index = index, EventName = eventName, Url = urls[index], Data = new byte[0],
+            return new BuglyResponse { Index = index, EventName = eventName, Url = urls[index], Data = Array.Empty<byte>(),
                 FailureReason = reason, Success = false, Transport = snapshot.Transport,
+#if UNITY_ANDROID && !UNITY_EDITOR
+                DurationMs = 0,
+#else
                 DurationMs = clocks[index] == null ? 0 : clocks[index].ElapsedMilliseconds,
+#endif
                 Result = reason == "canceled" ? RequestResult.Canceled : RequestResult.ConnectionError };
         }
         private void Queue(BuglyResponse response) { incoming.Enqueue(response); }
@@ -247,7 +283,7 @@ namespace ZeroGame.Networking
             {
                 if (response.Index < 0 || response.Index >= responses.Length || responses[response.Index] != null) continue;
                 responses[response.Index] = response; count++;
-                if (reportNetCost) BuglySdk.Reporter.Report(response, Debug.isDebugBuild);
+                if (reportNetCost) BuglySdk.Reporter.Report(response, Debug.isDebugBuild, logSuccessfulReports);
                 var handlers = UrlCompleted;
                 if (handlers != null)
                     foreach (Action<BuglyResponse> handler in handlers.GetInvocationList())
@@ -257,10 +293,9 @@ namespace ZeroGame.Networking
             {
                 IsDone = true;
 #if UNITY_ANDROID && !UNITY_EDITOR
-                foreach (var job in jobs) job.Dispose();
-                jobs.Clear();
+                if (nativeJob != null) { nativeJob.Dispose(); nativeJob = null; }
 #endif
-                operation.Complete();
+                operation?.Complete();
                 if (autoDispose) Dispose();
             }
         }
@@ -270,10 +305,11 @@ namespace ZeroGame.Networking
             if (!sent || IsDone || aborted) return;
             aborted = true;
 #if UNITY_ANDROID && !UNITY_EDITOR
-            foreach (var job in jobs)
-                try { job.Call("cancel"); } catch (Exception error) { Debug.LogWarning("[BuglyWebRequest] Cancel: " + error.GetType().Name); }
-#endif
+            if (nativeJob != null)
+                try { nativeJob.Call("cancel"); } catch (Exception error) { Debug.LogWarning("[BuglyWebRequest] Cancel: " + error.GetType().Name); }
+#else
             foreach (var request in managedRequests) request.Abort();
+#endif
             for (int i = 0; i < urls.Length; i++) if (responses[i] == null) Queue(Failure(i, "canceled"));
         }
         public void Dispose() { if (disposed) return; Abort(); disposed = true; }
@@ -295,7 +331,7 @@ namespace ZeroGame.Networking
                         string reason = native.Call<string>("getFailure");
                         int status = native.Call<int>("getStatus");
                         owner.Queue(new BuglyResponse { Index = index, EventName = owner.eventName, Url = owner.urls[index],
-                            Data = native.Call<byte[]>("getData"), ResponseCode = status, Success = success,
+                            Data = owner.trace ? Array.Empty<byte>() : native.Call<byte[]>("getData"), ResponseCode = status, Success = success,
                             FailureReason = reason, Attempts = native.Call<int>("getAttempts"),
                             DurationMs = native.Call<long>("getDurationMs"), LastAttemptDurationMs = native.Call<long>("getLastAttemptMs"),
                             Transport = owner.snapshot.Transport,
@@ -307,6 +343,21 @@ namespace ZeroGame.Networking
             }
         }
 #else
+        // Drain Trace responses without retaining their body; still enforce the same byte limit.
+        private sealed class TraceDownloadHandler : DownloadHandlerScript
+        {
+            private long received;
+            private readonly int limit;
+            internal bool TooLarge { get; private set; }
+            internal TraceDownloadHandler(int limit) : base(new byte[8192]) { this.limit = limit; }
+            protected override bool ReceiveData(byte[] data, int length)
+            {
+                received += length;
+                TooLarge = received > limit;
+                return !TooLarge;
+            }
+        }
+
         private IEnumerator RunManaged(int index)
         {
             var total = Stopwatch.StartNew();
@@ -317,7 +368,9 @@ namespace ZeroGame.Networking
                 var clock = Stopwatch.StartNew();
                 using (var request = new UnityWebRequest(urls[index], "POST"))
                 {
-                    request.uploadHandler = new UploadHandlerRaw(body); request.downloadHandler = new DownloadHandlerBuffer();
+                    request.uploadHandler = new UploadHandlerRaw(body);
+                    var traceDownload = trace ? new TraceDownloadHandler(snapshot.MaxResponseBytes) : null;
+                    request.downloadHandler = traceDownload != null ? (DownloadHandler)traceDownload : new DownloadHandlerBuffer();
                     request.timeout = snapshot.TimeoutSeconds;
                     for (int h = 0; h < headerNames.Length; h++) request.SetRequestHeader(headerNames[h], headerValues[h]);
                     managedRequests.Add(request);
@@ -329,11 +382,11 @@ namespace ZeroGame.Networking
                     finally { managedRequests.Remove(request); }
                     terminal = Failure(index, "connection_error"); terminal.Attempts = attempt;
                     terminal.ResponseCode = started == null ? 0 : request.responseCode;
-                    terminal.Data = started == null ? new byte[0] : request.downloadHandler.data ?? new byte[0];
+                    terminal.Data = trace || started == null ? Array.Empty<byte>() : request.downloadHandler.data ?? Array.Empty<byte>();
                     terminal.Success = started != null && request.result == UnityWebRequest.Result.Success && request.responseCode >= 200 && request.responseCode < 300;
                     bool timeout = !string.IsNullOrEmpty(request.error) && (request.error.ToLowerInvariant().Contains("timeout") || request.error.ToLowerInvariant().Contains("timed out"));
                     terminal.FailureReason = terminal.Success ? "" : aborted ? "canceled" : sendFailure ?? (timeout ? "timeout" : request.responseCode >= 400 ? "http_" + request.responseCode : "connection_error");
-                    if (terminal.Data.Length > snapshot.MaxResponseBytes) { terminal.Data = new byte[0]; terminal.Success = false; terminal.FailureReason = "response_too_large"; }
+                    if ((traceDownload != null && traceDownload.TooLarge) || terminal.Data.Length > snapshot.MaxResponseBytes) { terminal.Data = Array.Empty<byte>(); terminal.Success = false; terminal.FailureReason = "response_too_large"; }
                     terminal.LastAttemptDurationMs = clock.ElapsedMilliseconds;
                     terminal.Result = terminal.Success ? RequestResult.Success : aborted ? RequestResult.Canceled :
                         request.responseCode >= 400 ? RequestResult.ProtocolError : RequestResult.ConnectionError;
