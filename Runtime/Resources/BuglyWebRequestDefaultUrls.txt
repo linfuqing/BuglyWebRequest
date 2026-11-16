@@ -1,5 +1,7 @@
 # UTF-8; one complete HTTP(S) URL per line.
 # Blank lines and full-line # or // comments are ignored.
 # Each URL is requested independently. No requests are sent just by loading this file.
-https://echo-server-tokyo-tencent.lightboat.games
-https://echo-server-tokyo-google.lightboat.games
+https://echo-server-tokyo-google.lightboat.games/
+https://echo-server-tokyo-tencent.lightboat.games/
+https://echo-server-tokyo-google.lightboat.pro/
+https://echo-server-tokyo-tencent.lightboat.pro/
