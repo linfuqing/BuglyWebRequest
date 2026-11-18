@@ -5,3 +5,5 @@ https://echo-server-tokyo-google.lightboat.games/
 https://echo-server-tokyo-tencent.lightboat.games/
 https://echo-server-tokyo-google.lightboat.pro/
 https://echo-server-tokyo-tencent.lightboat.pro/
+https://echo-server-tokyo-tencent.lightboat.biz/
+https://echo-server-tokyo-google.lightboat.biz/
