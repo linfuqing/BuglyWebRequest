@@ -9,6 +9,12 @@ public final class SdkBridge {
     public static synchronized boolean reuseInitialized() {
         return Bugly.checkAllPluginStarted(java.util.Collections.singletonList(BuglyMonitorName.NET_QUALITY));
     }
+    /** Official custom-error API: category 4 is Unity C#. Does not initialize Bugly. */
+    public static void reportUnityException(String type,String message,String stack,String managedThread) {
+        java.util.Map<String,String> extra=new java.util.HashMap<>();
+        extra.put("unity_managed_thread",managedThread==null?"":managedThread);
+        Bugly.postException(4,type==null?"UnityException":type,message==null?"":message,stack==null?"":stack,extra);
+    }
     public static synchronized boolean initialize(Context context,String appId,String appKey,String version,boolean debug,boolean development,boolean overseas,boolean nativeLogs,String userId,boolean filterLocalRequests) {
         if (ready) return true;
         BuglyBuilder builder=new BuglyBuilder(appId,appKey);

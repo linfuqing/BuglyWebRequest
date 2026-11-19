@@ -13,8 +13,12 @@ namespace ZeroGame.Networking
         [Tooltip("下载前已获得隐私同意的项目可启用；不会写入游戏内点击同意记录。" )]
         public bool InitializeOnStartup = true;
 
-        [Header("Bugly 网络监控" )]
+        [Header("Bugly Android" )]
         public bool EnableBugly = true;
+        [Tooltip("Bugly 就绪后自动捕获 Unity C# 异常日志，后台在“错误”栏目查看；仅 Android 真机。")]
+        public bool CaptureUnityExceptions = true;
+        [Tooltip("同时收集 Debug.LogError 和 Assert；关闭后自动捕获仅限 LogType.Exception。重复错误会去重，队列有容量上限。")]
+        public bool CaptureUnityErrors = true;
         [Tooltip("由游戏先初始化 Bugly 并启用 NET_QUALITY；本 SDK 不再初始化或覆盖原生配置。")]
         public bool ReuseBuglyInstance;
         public string BuglyAppId = "";

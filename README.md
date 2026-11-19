@@ -32,7 +32,9 @@ BuglySdkManager.Instance.InitializeAfterConsent();
 
 | 配置 | 说明 |
 | --- | --- |
-| Enable Bugly | 启用 Bugly 网络监控。 |
+| Enable Bugly | 启用 Bugly Android 接入，保留原生崩溃能力。 |
+| Capture Unity Exceptions | Bugly 就绪后自动捕获 Unity C# 异常日志，默认开启，仅 Android 真机。 |
+| Capture Unity Errors | 同时捕获 LogError、Assert，默认开启；关闭后仍捕获 Exception。 |
 | Reuse Bugly Instance | 复用游戏已初始化的 Bugly，不重复初始化或覆盖配置。 |
 | Bugly AppID / AppKey | Bugly 后台「设置 > 产品信息」中的 APP ID / APP KEY。 |
 | Bugly Region | Overseas：海外版；Domestic：国内版，按应用所属版本选择。 |
@@ -118,3 +120,25 @@ IEnumerator SendManually()
 
 
 完成以上任意一种，SDK会按配置进行 Bugly 网络监控和数数网络情况埋点
+
+—— Unity C# 异常上报（Android）
+
+SDK 初始化成功后默认捕获 Unity 异常日志；Debug.LogError、Assert 是否捕获由 CaptureUnityErrors 控制。不会重复初始化原生 Bugly。C# 异常在 Bugly 后台的“错误”栏目查看，Java/Native 崩溃仍看“崩溃”。
+
+已捕获异常可主动提交：
+```csharp
+try { /* 业务代码 */ }
+catch (System.Exception error) { BuglySdk.ReportException(error); }
+```
+
+如果仅由游戏完成原生 Bugly 初始化、没有 SDK Prefab 且不发送 SDK 请求，在原生 NET_QUALITY 就绪后于 Unity 主线程调用一次：
+```csharp
+BuglySdk.EnableUnityExceptionHandler();
+```
+有 Prefab 或已通过 SDK 请求完成原生复用时，会自动接入。DisableUnityExceptionHandler() 可停止后续自动捕获，EnableUnityExceptionHandler() 可重新开启。若工程已有官方 Bugly Unity C# 异常捕获，请关闭本 SDK 的 CaptureUnityExceptions，避免双重订阅。
+
+自动回调只入队，主线程每帧最多提交4条；队列最多64条，相同类型/消息/堆栈10秒内去重，错误刷屏时会限流并提示。仅捕获 Unity 分发的异常/错误日志，不保证突然终止前未刷新队列的错误送达；不收集普通日志和 Warning，不自动退出游戏。ReportException 接口不支持 Editor/WebGL/桌面端。
+
+Samples 中 BuglyExceptionDemo 提供三个手动测试方法：抛出 Unity 异常、打印 LogError、上报已捕获异常。脚本存在资源中不会自动触发测试。
+
+

@@ -52,6 +52,7 @@ namespace ZeroGame.Networking
                 }
             }
 #endif
+            UnityExceptionReporter.Configure(config.EnableBugly && IsInitialized, config.CaptureUnityExceptions, config.CaptureUnityErrors);
             bool platformAllowed = Application.platform == RuntimePlatform.Android ||
                 (Application.isEditor && config.EnableEditorAnalytics);
             if (config.EnableThinkingData && (config.ReuseThinkingDataInstance || !ThinkingDataReady) && platformAllowed)
@@ -99,6 +100,7 @@ namespace ZeroGame.Networking
         {
             if (config.EnableBugly && config.ReuseBuglyInstance && Application.platform == RuntimePlatform.Android && !Application.isEditor)
                 RequireReusedBugly();
+            UnityExceptionReporter.Configure(config.EnableBugly && IsInitialized, config.CaptureUnityExceptions, config.CaptureUnityErrors);
             if (config.EnableThinkingData && config.ReuseThinkingDataInstance && reportNetCost &&
                 RequestInitializationGuard.SupportsThinkingData(config, Application.platform == RuntimePlatform.Android && !Application.isEditor, Application.isEditor))
                 BindThinkingData(config.ThinkingAppId, config.EnableEditorAnalytics, true);
@@ -109,6 +111,36 @@ namespace ZeroGame.Networking
             IsInitialized = NativeSdkInstances.BuglyNetworkReady();
             if (!IsInitialized)
                 throw new InvalidOperationException("[BuglyWebRequest][Reuse.Bugly] 未检测到已启动的 NET_QUALITY 网络监控模块。请先由游戏完成官方 Bugly 初始化并启用该模块，等待模块启动后重试；本 SDK 不会重复初始化或覆盖原生配置。");
+        }
+
+        public static bool UnityExceptionHandlerEnabled { get { return UnityExceptionReporter.Enabled; } }
+
+        /// <summary>Native-only integration: call on Unity's main thread after native Bugly NET_QUALITY is ready. Never initializes Bugly again.</summary>
+        public static void EnableUnityExceptionHandler(bool captureErrors = true)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            var config = BuglySdkManager.CurrentSettings;
+            if (config != null && !config.EnableBugly)
+                throw new InvalidOperationException("[BuglyWebRequest][UnityException] EnableBugly 已关闭，请先启用或由游戏配置原生 Bugly。");
+            if (!IsInitialized) RequireReusedBugly();
+            UnityExceptionReporter.Enable(captureErrors);
+#else
+            throw new PlatformNotSupportedException("[BuglyWebRequest][UnityException] C# 异常上报当前仅支持 Android 真机，不在 Editor/WebGL/桌面端发送。");
+#endif
+        }
+
+        public static void DisableUnityExceptionHandler() { UnityExceptionReporter.Disable(); }
+
+        /// <summary>Queue a caught C# exception after SDK initialization; never logs the exception a second time.</summary>
+        public static void ReportException(Exception exception)
+        {
+            if (exception == null) throw new ArgumentNullException("exception", "[BuglyWebRequest][UnityException] 要上报的异常不能为 null。");
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (!IsInitialized) throw new InvalidOperationException("[BuglyWebRequest][UnityException] Bugly 尚未初始化，请先完成初始化或原生实例复用。");
+            UnityExceptionReporter.Report(exception);
+#else
+            throw new PlatformNotSupportedException("[BuglyWebRequest][UnityException] C# 异常上报当前仅支持 Android 真机。");
+#endif
         }
 
         // For consumer projects that already initialize the official SDK themselves.
