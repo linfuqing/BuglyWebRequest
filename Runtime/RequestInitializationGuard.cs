@@ -9,7 +9,7 @@ namespace ZeroGame.Networking
         internal static BuglySdkSettings EnsureReady(string eventName, RequestOptions options)
         {
             var config = BuglySdkManager.CurrentSettings ?? BuglySdk.ExternalReuseSettings();
-            try { BuglySdk.RefreshReusedInstances(config, options.ReportNetCost); }
+            try { BuglySdk.RefreshReusedInstances(config); }
             catch (Exception error)
             {
                 throw new InvalidOperationException("[BuglyWebRequest][Request.Reuse] eventName='" + eventName +
@@ -18,7 +18,7 @@ namespace ZeroGame.Networking
             bool androidPlayer = Application.platform == RuntimePlatform.Android && !Application.isEditor;
             bool editor = Application.isEditor;
             bool sinkReady = false;
-            if (config != null && config.EnableThinkingData && options.ReportNetCost &&
+            if (config != null && config.EnableThinkingData && !config.ReuseThinkingDataInstance && options.ReportNetCost &&
                 SupportsThinkingData(config, androidPlayer, editor) && BuglySdk.ThinkingDataReady)
             {
                 try { sinkReady = BuglySdk.Reporter.Sink != null && BuglySdk.Reporter.Sink.IsReady; }
@@ -30,6 +30,9 @@ namespace ZeroGame.Networking
             }
             Validate(eventName, config, options, androidPlayer, editor, BuglySdk.IsInitialized,
                 BuglySdk.ThinkingDataReady, sinkReady, BuglySdk.LastInitializationError);
+            if (config.EnableThinkingData && config.ReuseThinkingDataInstance && options.ReportNetCost &&
+                SupportsThinkingData(config, androidPlayer, editor))
+                DeferredThinkingData.Begin(config);
             return config;
         }
 
@@ -48,7 +51,7 @@ namespace ZeroGame.Networking
             var missing = new List<string>();
             if (config.EnableBugly && androidPlayer && !buglyReady)
                 missing.Add("Bugly 网络监控已启用，但 Bugly 尚未初始化成功");
-            if (config.EnableThinkingData && options.ReportNetCost && SupportsThinkingData(config, androidPlayer, editor))
+            if (config.EnableThinkingData && !config.ReuseThinkingDataInstance && options.ReportNetCost && SupportsThinkingData(config, androidPlayer, editor))
             {
                 if (!thinkingReady) missing.Add("数数埋点已启用，但数数尚未初始化或绑定实例");
                 else if (!sinkReady) missing.Add("数数初始化标记已就绪，但埋点实例未绑定或 IsReady=false");

@@ -419,7 +419,8 @@ namespace ZeroGame.Networking
         private void Update()
         {
             for (int i = requests.Count - 1; i >= 0; i--) { requests[i].Pump(); if (requests[i].IsDone) requests.RemoveAt(i); }
+            DeferredThinkingData.Tick();
         }
-        private void OnApplicationQuit() { foreach (var request in requests) request.Abort(); }
+        private void OnApplicationQuit() { foreach (var request in requests) request.Abort(); DeferredThinkingData.EndSession(); }
     }
 }

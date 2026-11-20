@@ -58,6 +58,7 @@ MonoBehaviour:
     BuglyFilterLocalRequests: 0
     EnableThinkingData: 1
     ReuseThinkingDataInstance: 0
+    ThinkingReuseWaitTimeoutSeconds: 30
     ThinkingAppId: 
     ThinkingServerUrl: 
     ThinkingMode: 0

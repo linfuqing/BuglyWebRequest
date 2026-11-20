@@ -20,7 +20,6 @@ https://github.com/linfuqing/BuglyWebRequest.git
 由本 SDK 初始化：将包内 `Runtime/Prefabs/BuglyWebRequest.prefab` 拖入启动场景，在 Inspector 中填写配置，只需放一份。
 
 
-需要自定义超时等参数或选择数数实例时，仍可挂 Prefab，开启 Reuse Bugly Instance / Reuse Thinking Data Instance。复用时 Bugly 账号无需填写；数数 AppID 留空使用默认实例，填写可选择对应实例。原生实例未就绪时会明确报错，请求不会发送。
 
 开启 **InitializeOnStartup** 自动初始化，业务请求在初始化后发送。关闭时，在玩家同意隐私政策后调用：
 
@@ -51,6 +50,7 @@ BuglySdkManager.Instance.InitializeAfterConsent();
 | Thinking Mode | Normal：正常上报；Debug：调试且入库；DebugOnly：调试不入库。 |
 | Thinking Time Zone | Local：设备时区；UTC：UTC 时区；Other：填写 Time Zone Id。 |
 | Reuse Thinking Data Instance | 复用已初始化的数数；AppID 留空使用默认实例，填写选择对应实例，不覆盖配置。 |
+| Thinking Reuse Wait Timeout Seconds | 首次实际请求后检测数数初始化的最长秒数，默认 30；超时停止检测并报错一次。 |
 | Thinking Network Type | 数数数据上报使用的网络类型。 |
 | Thinking Enable Log | 输出数数 SDK 日志。 |
 | Enable Editor Analytics | 允许在 Unity Editor 中初始化数数并上报埋点。 |

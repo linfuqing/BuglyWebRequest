@@ -55,12 +55,12 @@ namespace ZeroGame.Networking
         {
             if (instance != this || Settings == null || !Settings.InitializeOnStartup) return;
             InitializeAfterConsent();
-            BuglySdk.LogInfo("[BuglyWebRequest] Prefab startup initialization: ready=" + IsReady +
-                "; Bugly=" + BuglySdk.IsInitialized + "; ThinkingData=" + BuglySdk.ThinkingDataReady);
+            LogInitializationResult();
         }
 
         public void AcceptPrivacyAndInitialize() { InitializeAfterConsent(); }
 
+        /// <summary>Ready permits network requests; reused ThinkingData binds lazily on first send. Check BuglySdk.ThinkingDataReady separately.</summary>
         public bool InitializeAfterConsent()
         {
             if (instance != this) return Instance.InitializeAfterConsent();
@@ -77,6 +77,12 @@ namespace ZeroGame.Networking
             IsReady = BuglySdk.InitializeAfterConsent(applied);
             LastError = IsReady ? "" : BuglySdk.LastInitializationError;
             return IsReady;
+        }
+
+        private void LogInitializationResult()
+        {
+            BuglySdk.LogInfo("[BuglyWebRequest] Prefab initialization: ready=" + IsReady +
+                "; Bugly=" + BuglySdk.IsInitialized + "; ThinkingData=" + BuglySdk.ThinkingDataReady);
         }
 
         private void OnDestroy()

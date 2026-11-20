@@ -34,6 +34,8 @@ namespace ZeroGame.Networking
         public bool EnableThinkingData = true;
         [Tooltip("由游戏先初始化数数；AppID 留空使用默认实例，填写时选择对应实例，不覆盖原生配置。")]
         public bool ReuseThinkingDataInstance;
+        [Tooltip("首次实际发送请求后，最多检测数数初始化的秒数。超时停止检测、报错一次并丢弃暂存埋点；网络请求继续。")]
+        public float ThinkingReuseWaitTimeoutSeconds = 30f;
         public string ThinkingAppId = "";
         public string ThinkingServerUrl = "";
         public TDMode ThinkingMode = TDMode.Normal;
@@ -63,6 +65,9 @@ namespace ZeroGame.Networking
             { error = "BuglyRegion 无效；请选择 Overseas 或 Domestic。"; return false; }
             if (EnableThinkingData)
             {
+                if (ReuseThinkingDataInstance && (float.IsNaN(ThinkingReuseWaitTimeoutSeconds) ||
+                    float.IsInfinity(ThinkingReuseWaitTimeoutSeconds) || ThinkingReuseWaitTimeoutSeconds <= 0))
+                { error = "ThinkingReuseWaitTimeoutSeconds 必须是大于 0 的有限秒数。"; return false; }
                 if (!ReuseThinkingDataInstance && string.IsNullOrWhiteSpace(ThinkingAppId)) { error = "EnableThinkingData 已开启，但 ThinkingAppId 为空；请填写需要上报的数数项目 AppID。"; return false; }
                 if (!ReuseThinkingDataInstance)
                 {

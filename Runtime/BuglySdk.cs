@@ -12,6 +12,23 @@ namespace ZeroGame.Networking
         public static string LastInitializationError { get; private set; } = string.Empty;
         public static readonly NetCostReporter Reporter = new NetCostReporter(message => Debug.Log(message));
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetSession()
+        {
+            IsInitialized = false;
+            ThinkingDataReady = false;
+            LastInitializationError = string.Empty;
+            Reporter.Reset();
+            DeferredThinkingData.Reset();
+        }
+
+        internal static void ClearThinkingBinding()
+        {
+            ThinkingDataReady = false;
+            Reporter.Sink = null;
+        }
+
+
         public static bool InitializeAfterConsent(BuglySdkSettings config)
         {
             if (config == null) throw new ArgumentNullException("config", "[BuglyWebRequest][Initialize] SDK 配置为 null；请使用场景 BuglySDK Prefab 的 Settings 初始化。");
@@ -55,7 +72,7 @@ namespace ZeroGame.Networking
             UnityExceptionReporter.Configure(config.EnableBugly && IsInitialized, config.CaptureUnityExceptions, config.CaptureUnityErrors);
             bool platformAllowed = Application.platform == RuntimePlatform.Android ||
                 (Application.isEditor && config.EnableEditorAnalytics);
-            if (config.EnableThinkingData && (config.ReuseThinkingDataInstance || !ThinkingDataReady) && platformAllowed)
+            if (config.EnableThinkingData && !config.ReuseThinkingDataInstance && !ThinkingDataReady && platformAllowed)
             {
                 try
                 {
@@ -76,7 +93,7 @@ namespace ZeroGame.Networking
             }
             LogInfo("[BuglyWebRequest] Bugly ready=" + IsInitialized + "; ThinkingData ready=" + ThinkingDataReady);
             bool needsBugly = config.EnableBugly && Application.platform == RuntimePlatform.Android && !Application.isEditor;
-            bool ready = (!needsBugly || IsInitialized) && (!config.EnableThinkingData || !platformAllowed || ThinkingDataReady);
+            bool ready = (!needsBugly || IsInitialized) && (!config.EnableThinkingData || !platformAllowed || config.ReuseThinkingDataInstance || ThinkingDataReady);
             LastInitializationError = string.Join("\n", failures.ToArray());
             if (!ready && failures.Count == 0)
                 LastInitializationError = "[BuglyWebRequest][Initialize] 初始化未完成：BuglyReady=" + IsInitialized + ", ThinkingDataReady=" + ThinkingDataReady + "；请查看对应模块初始化日志。";
@@ -96,14 +113,11 @@ namespace ZeroGame.Networking
                 ReuseThinkingDataInstance = true };
         }
 
-        internal static void RefreshReusedInstances(BuglySdkSettings config, bool reportNetCost)
+        internal static void RefreshReusedInstances(BuglySdkSettings config)
         {
             if (config.EnableBugly && config.ReuseBuglyInstance && Application.platform == RuntimePlatform.Android && !Application.isEditor)
                 RequireReusedBugly();
             UnityExceptionReporter.Configure(config.EnableBugly && IsInitialized, config.CaptureUnityExceptions, config.CaptureUnityErrors);
-            if (config.EnableThinkingData && config.ReuseThinkingDataInstance && reportNetCost &&
-                RequestInitializationGuard.SupportsThinkingData(config, Application.platform == RuntimePlatform.Android && !Application.isEditor, Application.isEditor))
-                BindThinkingData(config.ThinkingAppId, config.EnableEditorAnalytics, true);
         }
 
         private static void RequireReusedBugly()
@@ -149,7 +163,7 @@ namespace ZeroGame.Networking
             BindThinkingData(appId, enableEditorAnalytics, true);
         }
 
-        private static void BindThinkingData(string appId, bool enableEditorAnalytics, bool nativeReuse)
+        internal static void BindThinkingData(string appId, bool enableEditorAnalytics, bool nativeReuse)
         {
             string id = appId ?? "";
             if (!NativeSdkInstances.ThinkingReady(id))
@@ -158,6 +172,7 @@ namespace ZeroGame.Networking
                 throw new InvalidOperationException("[BuglyWebRequest][Reuse.ThinkingData] 未找到已初始化的数数实例（" +
                     (id.Length == 0 ? "默认实例" : "指定 AppID/实例标识") + "）。请先由游戏初始化官方 SDK；复用模式无需填写 ServerUrl、Mode 或 TimeZone，AppID 留空使用默认实例。");
             }
+            Reporter.ResumeBuffering();
             Reporter.Sink = new ThinkingSink(id, enableEditorAnalytics, nativeReuse);
             ThinkingDataReady = true;
         }
