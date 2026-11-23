@@ -142,3 +142,12 @@ BuglySdk.EnableUnityExceptionHandler();
 Samples 中 BuglyExceptionDemo 提供三个手动测试方法：抛出 Unity 异常、打印 LogError、上报已捕获异常。脚本存在资源中不会自动触发测试。
 
 
+
+—— 绑定 Bugly 玩家 ID
+
+Bugly 初始化完成、玩家登录成功后，在 Unity 主线程调用；支持 uint 和 string：
+```csharp
+BuglySdk.SetBuglyUserId(userId);
+// 或 BuglySdk.SetBuglyUserId("player_123");
+```
+切换账号后再次设置新 ID。不会重复初始化 SDK，也不会修改数数的账号。

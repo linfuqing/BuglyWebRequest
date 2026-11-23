@@ -127,6 +127,46 @@ namespace ZeroGame.Networking
                 throw new InvalidOperationException("[BuglyWebRequest][Reuse.Bugly] 未检测到已启动的 NET_QUALITY 网络监控模块。请先由游戏完成官方 Bugly 初始化并启用该模块，等待模块启动后重试；本 SDK 不会重复初始化或覆盖原生配置。");
         }
 
+        /// <summary>Set the logged-in player's Bugly ID on Unity's main thread after Bugly initialization.
+        /// Returns false in Editor/WebGL/desktop (no native call); true means the Android API accepted the call.
+        /// Does not initialize Bugly or ThinkingData, and does not change already reported records.</summary>
+        public static bool SetBuglyUserId(string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new ArgumentException("[BuglyWebRequest][SetBuglyUserId] userId 不能为空或全为空白；请传入登录成功后的真实玩家 ID。", "userId");
+#if UNITY_ANDROID && !UNITY_EDITOR
+            var config = BuglySdkManager.CurrentSettings;
+            if (config != null && !config.EnableBugly)
+                throw new InvalidOperationException("[BuglyWebRequest][SetBuglyUserId] EnableBugly 已关闭；请先启用并初始化 Bugly，再设置玩家 ID。");
+            try
+            {
+                // Supports consumer-owned native initialization without creating another SDK instance.
+                if (!IsInitialized && !NativeSdkInstances.BuglyNetworkReady())
+                    throw new InvalidOperationException("Bugly 尚未初始化，或原生复用的 NET_QUALITY 模块尚未就绪；请先完成 Bugly 初始化，再在登录成功后设置玩家 ID。");
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var context = activity.Call<AndroidJavaObject>("getApplicationContext"))
+                using (var bugly = new AndroidJavaClass("com.tencent.bugly.library.Bugly"))
+                    bugly.CallStatic("updateUserId", context, userId);
+                IsInitialized = true;
+                return true;
+            }
+            catch (Exception error)
+            {
+                throw new InvalidOperationException("[BuglyWebRequest][SetBuglyUserId] 设置 Bugly 玩家 ID 失败。请确认在 Unity 主线程调用、Bugly 已初始化，且 Android 包内包含支持 updateUserId 的原生 SDK。原始原因：" + error.Message, error);
+            }
+#else
+            LogInfo("[BuglyWebRequest][SetBuglyUserId] 当前为 Editor/WebGL/桌面环境，跳过 Android Bugly 用户 ID 设置。");
+            return false;
+#endif
+        }
+
+        /// <summary>Convenience overload for the game's numeric player ID.</summary>
+        public static bool SetBuglyUserId(uint userId)
+        {
+            return SetBuglyUserId(userId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
         public static bool UnityExceptionHandlerEnabled { get { return UnityExceptionReporter.Enabled; } }
 
         /// <summary>Native-only integration: call on Unity's main thread after native Bugly NET_QUALITY is ready. Never initializes Bugly again.</summary>
