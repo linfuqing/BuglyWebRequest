@@ -15,6 +15,8 @@ namespace ZeroGame.Networking
         public int RetryDelayMs = 250;
         public int MaxResponseBytes = 16 * 1024 * 1024;
         public bool ReportNetCost = true;
+        // Post also dispatches independent empty-body probes to the configured text URLs.
+        public bool TraceConfiguredUrlsOnPost = true;
 
         internal RequestOptions Snapshot()
         {

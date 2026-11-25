@@ -73,6 +73,7 @@ MonoBehaviour:
       RetryDelayMs: 250
       MaxResponseBytes: 16777216
       ReportNetCost: 1
+      TraceConfiguredUrlsOnPost: 1
     EnableEditorAnalytics: 0
     EnableSdkLogs: 1
     EnableNetCostLogs: 0

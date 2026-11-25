@@ -65,6 +65,7 @@ BuglySdkManager.Instance.InitializeAfterConsent();
 | Retry Delay Ms | 重试基础间隔，默认 250 毫秒，随重试次数递增，最多 2000 毫秒。 |
 | Max Response Bytes | 响应大小上限，默认 16 MiB，超出按失败处理。 |
 | Report Net Cost | 向数数上报 net_cost，每个 URL 重试结束后仅上报一次最终结果；不控制 Bugly 采集。 |
+| Trace Configured Urls On Post | 默认开启。Post 实际发送时，额外向 txt 中的 URL 发送空请求体 POST；业务 form 仅发往指定地址。 |
 
 使用 HTTP 地址时，在 Player Settings 中设置 **Allow downloads over HTTP**。
 

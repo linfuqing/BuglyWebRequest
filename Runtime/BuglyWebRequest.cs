@@ -143,15 +143,15 @@ namespace ZeroGame.Networking
             return StartOwned(new BuglyWebRequest(eventName, form, configuredUrls, true));
         }
 
-        /// <summary>创建单地址 POST 请求；设置参数后调用 SendWebRequest() 才开始发送。</summary>
+        /// <summary>创建业务单地址 POST；SendWebRequest 时默认额外发送独立的文本 URL 空请求，不影响业务响应与等待。</summary>
         /// <param name="eventName">本次请求的埋点标识。</param>
         /// <param name="form">发送给服务器的表单参数；无字段时传 new WWWForm()。</param>
-        /// <param name="url">单个完整 HTTP(S) 地址，不读取文本 URL 配置。</param>
+        /// <param name="url">业务请求的单个完整 HTTP(S) 地址；文本附加请求不替代此地址。</param>
         public static BuglyWebRequest Post(string eventName, WWWForm form, string url)
         {
             ValidateEventName(eventName);
             if (form == null) throw new ArgumentNullException("form", "[BuglyWebRequest][Post] form 不能为 null；没有字段时传 new WWWForm()。读取文本地址并自动发送请使用 Trace(eventName)。");
-            if (url == null) throw new ArgumentNullException("url", "[BuglyWebRequest][Post] url 不能为 null；请传入单个完整 HTTP(S) 地址，不读取文本配置。");
+            if (url == null) throw new ArgumentNullException("url", "[BuglyWebRequest][Post] url 不能为 null；请传入业务请求的单个完整 HTTP(S) 地址；文本附加请求不替代此地址。");
             ValidateUrl(url, "url", "[BuglyWebRequest][Post] url");
             return new BuglyWebRequest(eventName, form, new[] { url });
         }
@@ -229,6 +229,41 @@ namespace ZeroGame.Networking
             for (int i = 0; i < urls.Length; i++) runner.StartCoroutine(RunManaged(i));
             BuglySdk.LogInfo("[BuglyWebRequest] UnityWebRequest fallback (Editor/WebGL/desktop); urls=" + urls.Length);
 #endif
+            if (!trace && snapshot.TraceConfiguredUrlsOnPost) StartPostConfiguredUrls();
+        }
+
+        private void StartPostConfiguredUrls()
+        {
+            try
+            {
+                var configured = BuglyUrlConfig.LoadCached();
+                var additional = AdditionalPostUrls(configured, urls[0]);
+                if (additional.Length == 0) return;
+                // No business body or headers cross into probes. Share only validated option values.
+                var probe = new BuglyWebRequest(eventName, null, additional, true);
+                probe.Options = snapshot.Snapshot();
+                probe.Options.TraceConfiguredUrlsOnPost = false;
+                StartOwned(probe);
+            }
+            catch (Exception error)
+            {
+                Debug.LogWarning("[BuglyWebRequest][Post.ConfiguredUrls] eventName='" + eventName +
+                    "'：业务请求已独立启动，但附加文本 URL 请求启动失败。" + error.GetType().Name + "：" + error.Message);
+            }
+        }
+
+        private static string[] AdditionalPostUrls(string[] configured, string primaryUrl)
+        {
+            int excluded = 0;
+            for (int i = 0; i < configured.Length; i++)
+                if (string.Equals(configured[i], primaryUrl, StringComparison.Ordinal)) excluded++;
+            if (excluded == 0) return configured;
+            if (excluded == configured.Length) return Array.Empty<string>();
+            var additional = new string[configured.Length - excluded];
+            int next = 0;
+            for (int i = 0; i < configured.Length; i++)
+                if (!string.Equals(configured[i], primaryUrl, StringComparison.Ordinal)) additional[next++] = configured[i];
+            return additional;
         }
 
         private static void ValidateUrl(string url, string parameter, string context)
